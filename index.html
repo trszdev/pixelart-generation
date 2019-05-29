@@ -339,12 +339,12 @@
           var url = URL.createObjectURL(e.target.files[0])
           setImage(url, true)
         }
-        document.getElementById('submit-test1').onclick = setImage.bind(0, '/samples/vasilii.jpg')
-        document.getElementById('submit-test2').onclick = setImage.bind(0, '/samples/sonic.png')
-        document.getElementById('submit-test3').onclick = setImage.bind(0, '/samples/lenna.jpg')
-        document.getElementById('submit-test4').onclick = setImage.bind(0, '/samples/teapot.png')
-        document.getElementById('submit-test5').onclick = setImage.bind(0, '/samples/gradient.jpg')
-        document.getElementById('submit-test6').onclick = setImage.bind(0, '/samples/lily.jpg')
+        document.getElementById('submit-test1').onclick = setImage.bind(0, 'samples/vasilii.jpg')
+        document.getElementById('submit-test2').onclick = setImage.bind(0, 'samples/sonic.png')
+        document.getElementById('submit-test3').onclick = setImage.bind(0, 'samples/lenna.jpg')
+        document.getElementById('submit-test4').onclick = setImage.bind(0, 'samples/teapot.png')
+        document.getElementById('submit-test5').onclick = setImage.bind(0, 'samples/gradient.jpg')
+        document.getElementById('submit-test6').onclick = setImage.bind(0, 'samples/lily.jpg')
         dom.nnSubmit.onclick = nnSubmit
         dom.gerstnerSubmit.onclick = gerstnerSubmit
       </script>
