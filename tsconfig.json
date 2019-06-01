@@ -1,0 +1,12 @@
+{
+  "compilerOptions": {
+    "target": "es5",
+    "outFile": "index.js",
+    "module": "amd",
+    "rootDir": "src",
+    "lib": ["es2018", "dom"],
+    "sourceMap": true,
+    "downlevelIteration": true
+  },
+  "include": ["**/*"]
+}

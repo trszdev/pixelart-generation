@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>Custom RGB/LAB mapping</title>
+    <style>
+      body {
+        margin: 10px;
+        font-size: 16px;
+      }
+
+      input[type=submit]:not(:disabled) {
+        cursor: pointer;
+      }
+
+      canvas {
+        image-rendering: pixelated;
+        transform: translateZ(0);
+        position: absolute;
+        width: 256px;
+        height: 256px;
+      }
+
+      thead {
+        font-weight: bold;
+      }
+
+      .wrap {
+        perspective: 1000px;
+        perspective-origin: 50% 128px;
+        pointer-events: none;
+      }
+
+      .cube {
+        position: relative;
+        width: 256px;
+        height: 256px;
+        margin: 100px;
+        transform-style: preserve-3d;
+      }
+
+      .back {
+        transform: translateZ(-128px) rotateY(180deg);
+      }
+
+      .right {
+        transform: rotateY(-270deg) translateX(128px);
+        transform-origin: top right;
+      }
+
+      .left {
+        transform: rotateY(270deg) translateX(-128px);
+        transform-origin: center left;
+      }
+
+      .top {
+        transform: rotateX(-90deg) translateY(-128px);
+        transform-origin: top center;
+      }
+
+      .bottom {
+        transform: rotateX(90deg) translateY(128px);
+        transform-origin: bottom center;
+      }
+
+      .front {
+        transform: translateZ(128px);
+      }
+    </style>
+  </head>
+  <body>
+      <h1>Custom RGB/LAB mapping used in <a href="../">pixel art generation</a></h1>
+      <p>sRGB → XYZ → LAB. Drag cube with mouse</p>
+      <p>
+        Links:
+        <ul>
+          <li><a href="https://www.easyrgb.com/en/math.php">Easyrgb.com color conversions</a></li>
+          <li><a href="https://davidwalsh.name/demo/css-cube.php">How to create CSS cube</a></li>
+        </ul>
+      </p>
+      <table border="1">
+        <thead>
+          <td>RGB</td>
+          <td>LAB</td>
+        </thead>
+        <tr>
+          <td>
+            <div class="wrap">
+              <div id="rgb" class="cube">
+                <canvas class="front" height=256 width=256></canvas>
+                <canvas class="back" height=256 width=256></canvas>
+                <canvas class="top" height=256 width=256></canvas>
+                <canvas class="bottom" height=256 width=256></canvas>
+                <canvas class="left" height=256 width=256></canvas>
+                <canvas class="right" height=256 width=256></canvas>
+              </div>
+            </div>
+          </td>
+          <td>
+            <div class="wrap">
+              <div id="lab" class="cube">
+                <canvas class="front" height=256 width=256></canvas>
+                <canvas class="back" height=256 width=256></canvas>
+                <canvas class="top" height=256 width=256></canvas>
+                <canvas class="bottom" height=256 width=256></canvas>
+                <canvas class="left" height=256 width=256></canvas>
+                <canvas class="right" height=256 width=256></canvas>
+              </div>
+            </div>
+          </td>
+        </tr>
+      </table>
+      <script src="require.min.js"></script>
+      <script nomodule src="https://cdn.jsdelivr.net/npm/@babel/polyfill@7.4.4/dist/polyfill.min.js"></script>
+      <script src="index.js"></script>
+      <script>requirejs(['mapping'])</script>
+  </body>
+</html>

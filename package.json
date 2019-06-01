@@ -1,0 +1,29 @@
+{
+  "name": "pixelart-generation",
+  "version": "1.0.0",
+  "description": "See: https://trszdev.github.io/pixelart-generation",
+  "private": true,
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "dev": "run-p ts-watch serve",
+    "serve": "serve",
+    "ts-watch": "tsc --watch"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/trszdev/pixelart-generation.git"
+  },
+  "keywords": [],
+  "author": "trszdev",
+  "license": "UNLICENSED",
+  "bugs": {
+    "url": "https://github.com/trszdev/pixelart-generation/issues"
+  },
+  "homepage": "https://github.com/trszdev/pixelart-generation#readme",
+  "devDependencies": {
+    "npm-run-all": "^4.1.5",
+    "serve": "^11.0.1",
+    "typescript": "^3.5.1"
+  },
+  "dependencies": {}
+}

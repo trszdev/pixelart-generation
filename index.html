@@ -41,6 +41,10 @@
         border: thin solid black;
       }
 
+      .unused {
+        border-color: red;
+      }
+
       div {
         margin: 5px;
       }
@@ -49,18 +53,19 @@
   <body>
       <h1>PixelArtGeneration</h1>
       <p>
-        Two ways of generating pixel art from given image
+        Two ways of generating pixel art from given image:
         <ul>
-          <li>Neareast neighbour downscaling (2<sup>n</sup> factor) and k-means color quantization</li>
-          <li>Timothy Gerstner method</li>
+          <li>Neareast neighbour downsampling and k-means color quantization</li>
+          <li>Timothy Gerstner method (no additional saturation, alpha channel treated as importance)</li>
         </ul>
       </p>
       <p>
         Links:
         <ul>
-          <li><a href="/gerstner12.pdf">Pixelated Image Abstraction (pdf)</a></li>
+          <li><a href="gerstner12.pdf">Pixelated Image Abstraction (pdf)</a></li>
           <li><a href="http://tech-algorithm.com/articles/nearest-neighbor-image-scaling/">Nearest Neighbor Image Scaling</a></li>
           <li><a href="https://en.wikipedia.org/wiki/K-means_clustering">https://en.wikipedia.org/wiki/K-means_clustering</a></li>
+          <li><a href="rgb-lab">Custom RGB/LAB mapping</a></li>
         </ul>
       </p>
       <table border="1">
@@ -93,12 +98,8 @@
           </td>
           <td>
             <div>
-              <label for="nn-cycles">K-means cycles</label>
-              <input type="number" min="1" value="4" id="nn-cycles">
-            </div>
-            <div>
-              <label for="nn-factor">Downscale factor</label>
-              <input type="number" min="0" value="2" id="nn-factor">
+              <label for="nn-factor">Pixel size</label>
+              <input type="number" min="1" value="4" id="nn-factor">
             </div>
             <div>
               <label for="nn-colors">Pallete size</label>
@@ -107,246 +108,21 @@
             <div><input disabled type="submit" value="Submit" id="nn-submit"></div>
           </td>
           <td>
+            <div>
+              <label for="gerstner-factor">Pixel size</label>
+              <input type="number" min="1" value="4" id="nn-factor">
+            </div>
+            <div>
+              <label for="gerstner-colors">Palette size</label>
+              <input type="number" min="1" value="8" id="nn-factor">
+            </div>
             <div><input disabled type="submit" value="Submit" id="gerstner-submit"></div>
           </td>
         </tr>
       </table>
-      <script>
-        var dom = {
-          canvasOrig: document.getElementById('canvas-orig'),
-          canvasNn: document.getElementById('canvas-nn'),
-          progressNn: document.getElementById('progress-nn'),
-          progressGerstner: document.getElementById('progress-gerstner'),
-          canvasGerstner: document.getElementById('canvas-gerstner'),
-          paletteNn: document.getElementById('palette-nn'),
-          paletteGerstner: document.getElementById('palette-gerstner'),
-          nnFactor: document.getElementById('nn-factor'),
-          nnColors: document.getElementById('nn-colors'),
-          nnSubmit: document.getElementById('nn-submit'),
-          nnCycles: document.getElementById('nn-cycles'),
-          gerstnerSubmit: document.getElementById('gerstner-submit'),
-        }
-
-        function setProgress(node, val) {
-          clearChildren(node)
-          node.appendChild(document.createTextNode('(' + Math.round(val * 10000) / 100 + '%)'))
-        }
-
-        function setProgressNn(val, label) {
-          clearChildren(dom.progressNn)
-          if (val > 1) val = 1
-          if (val < 0) val = 0
-          var text = val ? '(' + Math.round(val * 10000) / 100 + '%)' : ''
-          if (label) text += ' ' + label
-          dom.progressNn.appendChild(document.createTextNode(text))
-        }
-
-        function clearChildren(node) {
-          while (node.firstChild) node.removeChild(node.firstChild)
-        }
-
-        function getPixel(ctx, x, y) {
-          var p = ctx.getImageData(x, y, 1, 1).data;
-          var r = p[0], g = p[1], b = p[2], a = p[3]
-          return 'rgba(' + [r, g, b, a / 255].join() + ')'
-          return '#' + ('000000' + ((r << 16) | (g << 8) | b).toString(16)).slice(-6)
-        }
-
-        function fillPalette(domPalette, colors) {
-          for (var i = 0; i < colors.length; i++) {
-            var node = document.createElement('div')
-            node.className = 'color'
-            node.style.background = 'rgb(' + colors[i].slice(0, 3).join() + ')'
-            domPalette.appendChild(node)
-          }
-        }
-
-        function findNearest(rgba, palette) {
-          var min = 999999999
-          var res = null
-          for (var i = 0; i < palette.length; i++) {
-            var p = palette[i]
-            var dr = rgba[0] - p[0]
-            var dg = rgba[1] - p[1]
-            var db = rgba[2] - p[2]
-            var d = dr*dr + dg*dg + db*db
-            if (d < min) {
-              min = d
-              res = p
-            }
-          }
-          return res
-        }
-
-        function kMeans(k, kCycles, canvas, cb) {
-          var palette = []
-          for (var i = 0; i < k; i++) {
-            palette.push([
-              Math.floor(Math.random() * 256),
-              Math.floor(Math.random() * 256),
-              Math.floor(Math.random() * 256),
-            ])
-          }
-          var ctx = canvas.getContext('2d')
-          var imageData = ctx.getImageData(0, 0, canvas.width, canvas.height).data
-          var result = []
-          var counter = 0
-          var j = 0
-          var i = 0
-          var cycles = kCycles
-          var max = canvas.width * canvas.height * 4
-          var updatingCentroids = false
-          var distortion = 0
-          animate(function () {
-            if (i >= canvas.width) {
-                i = 0
-                j++
-              }
-              if (j >= canvas.height) {
-                j = 0
-                updatingCentroids = !updatingCentroids
-                counter = 0
-                if (updatingCentroids) {
-                  for (var p = 0; p < palette.length; p++) palette[p] = [0, 0, 0, 0].concat(palette[p])
-                }
-                else {
-                  for (var p = 0; p < palette.length; p++) {
-                    var total = palette[p][3]
-                    if (total) palette[p] = [
-                      Math.floor(palette[p][0] / total),
-                      Math.floor(palette[p][1] / total),
-                      Math.floor(palette[p][2] / total),
-                    ]
-                    else palette[p] = [palette[p][4], palette[p][5], palette[p][6]]
-                  }
-                  cycles--
-                  if (cycles > 0) distortion = 0
-                }
-                setProgressNn(0)
-              }
-              if (cycles <= 0) {
-                setProgressNn(0)
-                return true
-              }
-              var r = imageData[counter++]
-              var g = imageData[counter++]
-              var b = imageData[counter++]
-              counter++
-              if (updatingCentroids) {
-                var centroid = palette[result[j][i]]
-                centroid[0] += r
-                centroid[1] += g
-                centroid[2] += b
-                centroid[3]++
-              } else {
-                var nearestIndex = 0
-                var nearestVal = 9999
-                for (var p = 0; p < palette.length; p++) {
-                  var dr = r - palette[p][0]
-                  var dg = g - palette[p][1]
-                  var db = b - palette[p][2]
-                  var d = dr * dr + dg * dg + db * db
-                  if (d < nearestVal) {
-                    nearestIndex = p
-                    nearestVal = d
-                  }
-                }
-                distortion += nearestVal
-                if (!result[j]) result[j] = Array(canvas.width)
-                result[j][i] = nearestIndex
-              }
-              setProgressNn(counter / max, cycles + ' of ' + kCycles)
-              i++
-          }, function () {
-            cb(result, palette, distortion)
-          })
-        }
-
-        function nnSubmit() {
-          dom.nnSubmit.disabled = true
-          var canvas = dom.canvasNn
-          var ctx = canvas.getContext('2d')
-          var origCtx = dom.canvasOrig.getContext('2d')
-          var factor = 1 << (+dom.nnFactor.value)
-          canvas.width = dom.canvasOrig.width
-          canvas.height = dom.canvasOrig.height
-          clearChildren(dom.paletteNn)
-          ctx.clearRect(0, 0, canvas.width, canvas.height)
-          var j = 0
-          var i = 0
-          var total = 0
-          var max = Math.floor(canvas.width / factor) * Math.floor(canvas.height / factor)
-          kMeans(+dom.nnColors.value, +dom.nnCycles.value, dom.canvasOrig, function(pixMap, palette) {
-            animate(function() {
-              if (i >= canvas.width) {
-                i = 0
-                j += factor
-              }
-              if (j >= canvas.height) {
-                setProgressNn(0)
-                return true
-              }
-              var alpha = origCtx.getImageData(i, j, 1, 1).data[3] / 255
-              var pix = palette[pixMap[j][i]]
-              ctx.fillStyle = 'rgba(' + pix.concat(alpha).join() + ')'
-              ctx.fillRect(i, j, factor, factor)
-              i += factor
-              total++
-              setProgressNn(total / max)
-            }, function() {
-              fillPalette(dom.paletteNn, palette)
-              dom.nnSubmit.disabled = false
-            })
-          })
-        }
-
-        function animate(func, cb) {
-          function wrap() {
-            var started = Date.now()
-            while (true) {
-              if (func()) return cb && cb()
-              if (Date.now() - started > 60) break
-            }
-            requestAnimationFrame(wrap)
-          }
-          wrap()
-        }
-
-        function gerstnerSubmit() {
-          
-        }
-
-        function setImage(url, needRevoke) {
-          var inputs = document.querySelectorAll('#uploads > input')
-          for (var i = 0; i < inputs.length; i++) inputs.item(i).disabled = true
-          var img = new Image()
-          img.onload = function() {
-            var canvas = dom.canvasOrig
-            var ctx = canvas.getContext('2d')
-            canvas.width = img.width
-            canvas.height = img.height
-            ctx.clearRect(0, 0, img.width, img.height)
-            ctx.drawImage(img, 0, 0)
-            if (needRevoke) URL.revokeObjectURL(url)
-            for (var i = 0; i < inputs.length; i++) inputs.item(i).disabled = false
-            dom.nnSubmit.disabled = false
-            dom.gerstnerSubmit.disabled = false
-          }
-          img.src = url
-        }
-
-        document.getElementById('upload').onchange = function (e) {
-          var url = URL.createObjectURL(e.target.files[0])
-          setImage(url, true)
-        }
-        document.getElementById('submit-test1').onclick = setImage.bind(0, 'samples/vasilii.jpg')
-        document.getElementById('submit-test2').onclick = setImage.bind(0, 'samples/sonic.png')
-        document.getElementById('submit-test3').onclick = setImage.bind(0, 'samples/lenna.jpg')
-        document.getElementById('submit-test4').onclick = setImage.bind(0, 'samples/teapot.png')
-        document.getElementById('submit-test5').onclick = setImage.bind(0, 'samples/gradient.jpg')
-        document.getElementById('submit-test6').onclick = setImage.bind(0, 'samples/lily.jpg')
-        dom.nnSubmit.onclick = nnSubmit
-        dom.gerstnerSubmit.onclick = gerstnerSubmit
-      </script>
+      <script src="require.min.js"></script>
+      <script nomodule src="https://cdn.jsdelivr.net/npm/@babel/polyfill@7.4.4/dist/polyfill.min.js"></script>
+      <script src="index.js"></script>
+      <script>requirejs(['index'])</script>
   </body>
 </html>
