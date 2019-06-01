@@ -1,6 +1,9 @@
-import { scaledLab2rgb, RgbColor, releaseEventLoop } from './util'
+import { scaledLab2rgb } from './util'
+import { RgbColor } from './types'
+import { AnimationFrameReleaser } from './releaser'
 
 
+const releaser = new AnimationFrameReleaser()
 let rx = 0
 let ry = 0
 const cubes = Array.from(document.querySelectorAll('.cube')) as HTMLElement[]
@@ -26,15 +29,15 @@ const fillFace = (canvas: HTMLCanvasElement,
 
 const fillFaces = async (canvases: HTMLCanvasElement[], mapFunc = scaledLab2rgb) => {
   fillFace(canvases[0], (x, y) => [255, 255 - x, y], mapFunc) // front
-  await releaseEventLoop()
+  await releaser.release()
   fillFace(canvases[1], (x, y) => [0, x, y], mapFunc) // back
-  await releaseEventLoop()
+  await releaser.release()
   fillFace(canvases[2], (x, y) => [255 - y, 255 - x, 0], mapFunc) // top
-  await releaseEventLoop()
+  await releaser.release()
   fillFace(canvases[3], (x, y) => [y, 255 - x, 255], mapFunc) // bottom
-  await releaseEventLoop()
+  await releaser.release()
   fillFace(canvases[4], (x, y) => [x, 255, y], mapFunc) // left
-  await releaseEventLoop()
+  await releaser.release()
   fillFace(canvases[5], (x, y) => [255 - x, 0, y], mapFunc) // right
 }
 

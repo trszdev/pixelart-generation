@@ -48,6 +48,10 @@
       div {
         margin: 5px;
       }
+
+      td {
+        vertical-align: top;
+      }
     </style>
   </head>
   <body>
@@ -72,7 +76,7 @@
         <thead>
           <td>Original</td>
           <td>Nearest neighbour <span id="progress-nn"></span></td>
-          <td>Gerstner <span id="progress-nn"></span></td>
+          <td>Gerstner <span id="progress-gerstner"></span></td>
         </thead>
         <tr>
           <td><canvas id="canvas-orig"></canvas></td>
@@ -110,11 +114,11 @@
           <td>
             <div>
               <label for="gerstner-factor">Pixel size</label>
-              <input type="number" min="1" value="4" id="nn-factor">
+              <input type="number" min="1" value="4" id="gerstner-factor">
             </div>
             <div>
               <label for="gerstner-colors">Palette size</label>
-              <input type="number" min="1" value="8" id="nn-factor">
+              <input type="number" min="1" value="8" id="gerstner-colors">
             </div>
             <div><input disabled type="submit" value="Submit" id="gerstner-submit"></div>
           </td>

@@ -1,28 +1,26 @@
-let lastRelease = Date.now()
+import { RgbColor, LabColor } from './types'
 
-export const releaseEventLoop = async (thresholdMs = 60) => {
-  const now = Date.now()
-  if (now - lastRelease > thresholdMs) {
-    lastRelease = now
-    return new Promise(res => requestAnimationFrame(res))
-  }
-}
 
-export const randInt = (max: number, min = 0) => Math.floor((max - min) * Math.random()) + min
-
-export type RgbColor = [number, number, number]
-
-export type LabColor = [number, number, number]
-
-export type Palette = RgbColor[]
-
-export type Image = RgbColor[][] | LabColor[][]
+export const randInt = (maxExclusive: number, minInclusive = 0) => Math.floor((maxExclusive - minInclusive) * Math.random()) + minInclusive
 
 export const wait = async (ms: number) => new Promise(res => setTimeout(res, ms))
 
 export const clamp = (val: number, min: number, max: number) => Math.max(Math.min(max, val), min)
 
 export const floorColor = (c: RgbColor) => <RgbColor>c.map(x => clamp(Math.round(x), 0, 255))
+
+export const diff = (from: any[], what: any[]) => from.map((x, i) => x - what[i])
+
+export const normSquare = (v: any[]) => v.reduce((acc, x) => acc + x * x, 0)
+
+export const normEuclidian = (v: any[]) => Math.sqrt(normSquare(v))
+
+export const distSquare = (from: any[], to: any[]) => normSquare(diff(from, to))
+
+export const minWithIndex = (v: number[]) => {
+  const [index, val] = v.reduce(([mi, mx], x, i) => mx > x ? [i, x] : [mi, mx], [-1, Number.MAX_VALUE])
+  return { index, val }
+}
 
 /*
 color conversions are from https://github.com/antimatter15/rgb-lab/blob/master/color.js
@@ -34,7 +32,7 @@ Lab ranges:
   b: [ -107.8636810449517, 94.48248544644461 ]
 }
 */
-export const scaledLab2rgb = (lab: LabColor): LabColor => lab2rgb([
+export const scaledLab2rgb = (lab: [number, number, number]): RgbColor => lab2rgb([
   lab[0] * 0.39215686274509803,
   lab[1] * 0.7232896281717113 - 86.1846364976253,
   lab[2] * 0.7935143783976327 - 107.8636810449517,

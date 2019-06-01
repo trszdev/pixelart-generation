@@ -1,115 +1,93 @@
-import { releaseEventLoop, randInt, Palette, RgbColor, floorColor } from './util'
+import { randInt, floorColor, minWithIndex, distSquare } from './util'
+import { PixelArtAlgorithm, Canvas, RgbColor, Palette, EventLoopReleaser, RgbaColor } from './types'
 
 
-export const maxColorDist = 256 * 256 * 3
+export class NaivePixelArt implements PixelArtAlgorithm {
+  readonly releaser: EventLoopReleaser
+  readonly pixelSize: number
+  readonly pixels: RgbaColor[][]
+  readonly palette: Palette
+  readonly clusterMap: number[][]
+  lastDistortion = 0
+  completed = false
 
-export class NaiveSolution {
-  readonly k: number
-  readonly kCycles: number
-  readonly factor: number
-  readonly canvas: HTMLCanvasElement
-  readonly imageData: ImageData
-  readonly events: EventTarget
-  readonly shouldRedrawOnCycle: boolean
-
-  constructor(k: number, factor: number, canvas: HTMLCanvasElement, imageData: ImageData,
-    kCycles = 10000, events = new EventTarget(), shouldRedrawOnCycle = true) {
-    this.k = k
-    this.kCycles = kCycles
-    this.factor = factor
-    this.canvas = canvas
-    this.imageData = imageData
-    this.events = events
-    this.shouldRedrawOnCycle = shouldRedrawOnCycle
+  constructor(palette: Palette, pixelSize: number,
+    releaser: EventLoopReleaser, pixels: RgbaColor[][], clusterMap: number[][]) {
+    this.pixelSize = pixelSize
+    this.releaser = releaser
+    this.palette = palette
+    this.pixels = pixels
+    this.clusterMap = clusterMap
   }
 
-  emitProgress(iteration: number) {
-    this.events.dispatchEvent(new CustomEvent('progress', { detail: iteration }))
+  static fromRandomPalette(paletteSize: number, pixelSize: number,
+    releaser: EventLoopReleaser, pixels: RgbaColor[][]) {
+    const palette = [...Array(paletteSize).keys()].map(() => ({
+      timesUsed: 0,
+      color: [randInt(256), randInt(256), randInt(256)] as RgbColor,
+    }))
+    const clusterMap = Array(pixels.length)
+    for (let i = 0; i < pixels.length; i++)
+      clusterMap[i] = Array(pixels[0].length).fill(randInt(paletteSize))
+    return new NaivePixelArt(palette, pixelSize, releaser, pixels, clusterMap)
   }
 
-  emitPalette(palette: Palette, paletteUsage: number[]) {
-    this.events.dispatchEvent(new CustomEvent('palette', { detail: { palette, paletteUsage } }))
-  }
-
-  async kMeans() {
-    let centroids: Palette = [...Array(this.k).keys()].map(() => [randInt(256), randInt(256), randInt(256)])
-    let means = centroids.map(_ => [0, 0, 0, 0])
-    const { width, height, data } = this.imageData
-    const clusterMap: number[][] = Array(height)
-    this.emitProgress(0)
-    this.emitPalette(centroids, centroids.map(_ => 0))
-    await releaseEventLoop()
-    let lastDistortion = 0
-    for (let kc = 1; kc <= this.kCycles; kc++) {
-      let counter = 0
-      let distortion = 0
-      const nextRgb = (): RgbColor => {
-        const r = data[counter++]
-        const g = data[counter++]
-        const b = data[counter++]
-        counter++
-        return [r, g, b]
+  async iterate(): Promise<void> {
+    let distortion = 0
+    const { pixels, releaser, palette, clusterMap } = this
+    const centroids = palette.map(x => x.color)
+    for (let j = 0; j < pixels.length; j++) {
+      const row = pixels[j]
+      for (let i = 0; i < row.length; i++) {
+        const [r, g, b] = row[i]
+        const { index, val } = minWithIndex(centroids.map(c => distSquare(c, [r, g, b])))
+        clusterMap[j][i] = index
+        distortion += val
       }
-      for (let j = 0; j < height; j++) {
-        for (let i = 0; i < width; i++) {
-          const [r, g, b] = nextRgb()
-          if (!clusterMap[j]) clusterMap[j] = Array(width)
-          const [index, val] = centroids.reduce(([mi, minDist], [pr, pg, pb], i) => {
-            const dr = pr - r
-            const dg = pg - g
-            const db = pb - b
-            const dist = dr * dr + dg * dg + db * db
-            return minDist < dist ? [mi, minDist] : [i, dist]
-          }, [0, maxColorDist])
-          clusterMap[j][i] = index
-          distortion += val
-        }
-        await releaseEventLoop()
-      }
-      counter = 0
-      means = centroids.map(_ => [0, 0, 0, 0])
-      for (let j = 0; j < height; j++) {
-        for (let i = 0; i < width; i++) {
-          const [r, g, b] = nextRgb()
-          const centroid = means[clusterMap[j][i]]
-          centroid[0] += r
-          centroid[1] += g
-          centroid[2] += b
-          centroid[3]++
-        }
-        await releaseEventLoop()
-      }
-      means.forEach(([mr, mg, mb, t], i) => {
-        if (t) centroids[i] = [mr / t, mg / t, mb / t]
-      })
-      const palette = centroids.map(floorColor)
-      const paletteUsage = means.map(x => x[3])
-      this.emitProgress(kc)
-      this.emitPalette(palette, paletteUsage)
-      await releaseEventLoop()
-      if (this.shouldRedrawOnCycle || kc === this.kCycles || lastDistortion === distortion) {
-        await this.draw(palette, clusterMap)
-      }
-      if (lastDistortion === distortion) {
-        return
-      }
-      lastDistortion = distortion
+      await releaser.release()
     }
+    if (distortion === this.lastDistortion) {
+      this.completed = true
+      return
+    }
+    this.lastDistortion = distortion
+    this.palette.forEach(x => {
+      x.timesUsed = 0
+      x.color = [0, 0, 0]
+    })
+    for (let j = 0; j < pixels.length; j++) {
+      const row = pixels[j]
+      for (let i = 0; i < row.length; i++) {
+        const [r, g, b] = row[i]
+        const centroid = this.palette[clusterMap[j][i]]
+        centroid.color[0] += r
+        centroid.color[1] += g
+        centroid.color[2] += b
+        centroid.timesUsed++
+      }
+      await releaser.release()
+    }
+    this.palette.forEach(x => {
+      const { color: [r, g, b], timesUsed: t } = x
+      if (t) x.color = floorColor([r / t, g / t, b / t])
+    })
   }
 
-  async draw(palette: Palette, clusterMap: number[][]) {
-    const { factor, imageData: { data, width, height } } = this
-    const ctx = this.canvas.getContext('2d')
-    for (let j = 0; j < height; j += factor) {
-      for (let i = 0; i < width; i += factor) {
-        const current = j * width + i
-        const alpha = data[current * 4 + 3] / 255
-        const pix = palette[clusterMap[j][i]]
-        ctx.clearRect(i, j, factor, factor)
-        ctx.fillStyle = `rgba(${pix.concat(alpha)})`
-        ctx.fillRect(i, j, factor, factor)
+  hasCompleted(): boolean {
+    return this.completed
+  }
+
+  async draw(canvas: Canvas): Promise<Palette> {
+    const { palette, pixels, pixelSize, clusterMap, releaser } = this
+    for (let j = 0; j < pixels.length; j += pixelSize) {
+      const row = pixels[j]
+      for (let i = 0; i < row.length; i += pixelSize) {
+        const alpha = row[i][3]
+        const [r, g, b] = palette[clusterMap[j][i]].color
+        canvas.fillRect(i, j, pixelSize, pixelSize, [r, g, b, alpha])
       }
-      await releaseEventLoop()
+      await releaser.release()
     }
+    return this.palette
   }
 }

@@ -1,4 +1,4 @@
-import { Palette } from './util'
+import { Palette } from './types'
 
 
 export const dom = {
@@ -28,15 +28,46 @@ export const clearChildren = (node: HTMLElement) => {
   while (node.firstChild) node.removeChild(node.firstChild)
 }
 
-export const fillPalette = (domPalette: HTMLElement, colors: Palette, paletteUsage: number[]) => {
+export const fillPalette = (domPalette: HTMLElement, palette: Palette) => {
   clearChildren(domPalette)
-  const allUsage = paletteUsage.reduce((acc, x) => acc + x)
-  const colorsWithUsage = colors.map((c, i) => c.concat(paletteUsage[i])).sort((a, b) => b[3] - a[3])
-  colorsWithUsage.forEach(([r, g, b, u]) => {
+  const paletteCopy = palette.map(x => x)
+  const allUsage = paletteCopy.reduce((acc, x) => acc + x.timesUsed, 0)
+  paletteCopy.sort((a, b) => b.timesUsed - a.timesUsed)
+  paletteCopy.forEach(({ timesUsed: u, color: [r, g, b] }) => {
     const node = document.createElement('div')
     node.title = u ? `Usage ${Math.floor(u / allUsage * 10000) / 100}%` : "This color wasn't used"
     node.className = u ? 'color' : 'unused color'
     node.style.background = `rgb(${[r, g, b]})`
     domPalette.appendChild(node)
   })
+}
+
+export class ButtonProcess {
+  running: boolean
+  btn: HTMLInputElement
+
+  constructor(btn: HTMLInputElement, running = false) {
+    this.running = running
+    this.btn = btn
+  }
+
+  tryFreeButton(force = false): boolean {
+    if (!force && this.running) return false
+    this.running = false
+    this.btn.value = 'Submit'
+    this.btn.disabled = false
+    return true
+  }
+
+  isCancelling(): boolean {
+    if (this.running) {
+      this.btn.disabled = true
+      this.running = false
+      
+    } else {
+      this.running = true
+      this.btn.value = 'Cancel'
+    }
+    return !this.running
+  }
 }

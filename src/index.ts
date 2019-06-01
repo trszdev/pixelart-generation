@@ -1,6 +1,11 @@
-import { dom, fillPalette, setProgress } from './dom'
-import { NaiveSolution } from './naive'
+import { dom, fillPalette, setProgress, ButtonProcess } from './dom'
+import { NaivePixelArt } from './naive'
+import WrappedHtmlCanvas from './canvas'
+import { AnimationFrameReleaser } from './releaser'
 
+
+
+const releaser = new AnimationFrameReleaser()
 
 const setImage = (url: string, needRevoke = false) => {
   const inputs: NodeListOf<HTMLInputElement> = document.querySelectorAll('#uploads > input')
@@ -35,25 +40,41 @@ dom.submitTests.forEach((inp, i) => inp.onclick = setImage.bind(0, [
   'samples/lily.jpg'
 ][i]))
 
+
+const nnProcess = new ButtonProcess(dom.nnSubmit)
 dom.nnSubmit.onclick = async () => {
-  dom.nnSubmit.disabled = true
-  const { width, height } = dom.canvasOrig
-  dom.canvasNn.width = width
-  dom.canvasNn.height = height
-  dom.canvasNn.getContext('2d').clearRect(0, 0, width, height)
-  const imageData = dom.canvasOrig.getContext('2d').getImageData(0, 0, width, height)
-  const ns = new NaiveSolution(dom.nnColors.valueAsNumber, dom.nnFactor.valueAsNumber, dom.canvasNn, imageData)
-  const onProgress = (e: CustomEvent) => setProgress(dom.progressNn, e.detail)
-  const onPalette = ({ detail: { palette, paletteUsage } }: CustomEvent) => fillPalette(dom.paletteNn, palette, paletteUsage)
-  ns.events.addEventListener('progress', onProgress)
-  ns.events.addEventListener('palette', onPalette)
-  await ns.kMeans()
-  ns.events.removeEventListener('progress', onProgress)
-  ns.events.removeEventListener('palette', onPalette)
-  dom.nnSubmit.disabled = false
+  if (nnProcess.isCancelling()) return
+  dom.canvasNn.width = dom.canvasOrig.width
+  dom.canvasNn.height = dom.canvasOrig.height
+  const canvas = new WrappedHtmlCanvas(dom.canvasNn)
+  const pixels = (new WrappedHtmlCanvas(dom.canvasOrig)).getPixels()
+  const ns = NaivePixelArt.fromRandomPalette(dom.nnColors.valueAsNumber, dom.nnFactor.valueAsNumber, releaser, pixels)
+  for (let i = 1; !ns.hasCompleted(); i++) {
+    await ns.iterate()
+    if (nnProcess.tryFreeButton()) return
+    const palette = await ns.draw(canvas)
+    setProgress(dom.progressNn, i)
+    fillPalette(dom.paletteNn, palette)
+    if (nnProcess.tryFreeButton()) return
+  }
+  nnProcess.tryFreeButton(true)
 }
 
+const gerstnerProcess = new ButtonProcess(dom.gerstnerSubmit)
 dom.gerstnerSubmit.onclick = async () => {
-  dom.gerstnerSubmit.disabled = true
-  dom.gerstnerSubmit.disabled = false
+  if (gerstnerProcess.isCancelling()) return
+  dom.canvasGerstner.width = dom.canvasOrig.width
+  dom.canvasGerstner.height = dom.canvasOrig.height
+  const canvas = new WrappedHtmlCanvas(dom.canvasGerstner)
+  const pixels = (new WrappedHtmlCanvas(dom.canvasOrig)).getPixels()
+  const ns = NaivePixelArt.fromRandomPalette(dom.gerstnerColors.valueAsNumber, dom.gerstnerFactor.valueAsNumber, releaser, pixels)
+  for (let i = 1; !ns.hasCompleted(); i++) {
+    await ns.iterate()
+    if (gerstnerProcess.tryFreeButton()) return
+    const palette = await ns.draw(canvas)
+    setProgress(dom.progressGerstner, i)
+    fillPalette(dom.paletteGerstner, palette)
+    if (gerstnerProcess.tryFreeButton()) return
+  }
+  gerstnerProcess.tryFreeButton(true)
 }
