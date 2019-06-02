@@ -198,6 +198,18 @@ define("util", ["require", "exports"], function (require, exports) {
     exports.normSquare = function (v) { return v.reduce(function (acc, x) { return acc + x * x; }, 0); };
     exports.normEuclidian = function (v) { return Math.sqrt(exports.normSquare(v)); };
     exports.distSquare = function (from, to) { return exports.normSquare(exports.diff(from, to)); };
+    exports.dist = function (from, to) { return exports.normEuclidian(exports.diff(from, to)); };
+    exports.array1d = function (size, filler) { return __spread(Array(size).keys()).map(filler); };
+    exports.array2d = function (width, height, filler) {
+        var result = Array(height);
+        var _loop_1 = function (y) {
+            result[y] = exports.array1d(width, function (x) { return filler(x, y); });
+        };
+        for (var y = 0; y < height; y++) {
+            _loop_1(y);
+        }
+        return result;
+    };
     exports.minWithIndex = function (v) {
         var _a = __read(v.reduce(function (_a, x, i) {
             var _b = __read(_a, 2), mi = _b[0], mx = _b[1];
@@ -251,7 +263,143 @@ define("util", ["require", "exports"], function (require, exports) {
         return [(116 * y) - 16, 500 * (x - y), 200 * (y - z)];
     };
 });
-define("naive", ["require", "exports", "util"], function (require, exports, util_1) {
+define("gerstner", ["require", "exports", "util"], function (require, exports, util_1) {
+    "use strict";
+    Object.defineProperty(exports, "__esModule", { value: true });
+    var BilateralFilter = /** @class */ (function () {
+        function BilateralFilter() {
+            this.kernelSize = 3;
+            this.colorStd = 4;
+            this.positionStd = 0.87;
+        }
+        return BilateralFilter;
+    }());
+    exports.BilateralFilter = BilateralFilter;
+    var LaplaceSmoothFilter = /** @class */ (function () {
+        function LaplaceSmoothFilter() {
+            this.factor = 0.4;
+        }
+        return LaplaceSmoothFilter;
+    }());
+    exports.LaplaceSmoothFilter = LaplaceSmoothFilter;
+    var GerstnerPixelArt = /** @class */ (function () {
+        function GerstnerPixelArt(temperature, pixelSize, bilateralFilter, laplaceFilter, slicTolerance) {
+            if (slicTolerance === void 0) { slicTolerance = 45; }
+            this.paleteWasFilled = false;
+            this.temperature = temperature;
+            this.slicTolerance = slicTolerance;
+            this.bilateralFilter = bilateralFilter;
+            this.laplaceFilter = laplaceFilter;
+        }
+        GerstnerPixelArt.prototype.setPaletteToAverage = function () {
+            // set palette to average Pix::GetAveragedPalette()
+        };
+        GerstnerPixelArt.prototype.updateSuperPixelMapping = function () {
+            return __awaiter(this, void 0, void 0, function () {
+                var dmap, _a, outHeight, outWidth, width, height, regionMap, slicRadius, input, slicTolerance, palette, releaser, j, i, _b, x, y, color, maxX, maxY, minX, minY, labColor, xx, yy, colorDist, d;
+                return __generator(this, function (_c) {
+                    switch (_c.label) {
+                        case 0:
+                            this.setPaletteToAverage();
+                            this.regionMap = util_1.array2d(this.width, this.height, function () { return null; });
+                            dmap = util_1.array2d(this.width, this.height, function () { return Number.MAX_VALUE; });
+                            _a = this, outHeight = _a.outHeight, outWidth = _a.outWidth, width = _a.width, height = _a.height, regionMap = _a.regionMap, slicRadius = _a.slicRadius, input = _a.input, slicTolerance = _a.slicTolerance, palette = _a.palette, releaser = _a.releaser;
+                            j = 1;
+                            _c.label = 1;
+                        case 1:
+                            if (!(j < outHeight - 1)) return [3 /*break*/, 6];
+                            i = 1;
+                            _c.label = 2;
+                        case 2:
+                            if (!(i < outWidth - 1)) return [3 /*break*/, 5];
+                            _b = this.centroids[j][i], x = _b.x, y = _b.y, color = _b.color;
+                            maxX = Math.min(width - 1, x + slicRadius);
+                            maxY = Math.min(height - 1, y + slicRadius);
+                            minX = Math.floor(Math.max(0, x - slicRadius));
+                            minY = Math.floor(Math.max(0, y - slicRadius));
+                            labColor = palette[color];
+                            for (xx = Math.floor(minX); xx <= maxX; xx++)
+                                for (yy = Math.floor(minY); yy <= maxY; yy++) {
+                                    colorDist = util_1.dist(labColor, input[yy][xx]);
+                                    d = colorDist + slicTolerance * slicRadius * util_1.dist([xx, yy], [x, y]);
+                                    if (d < dmap[yy][xx]) {
+                                        dmap[yy][xx] = d;
+                                        regionMap[yy][xx] = [x, y];
+                                    }
+                                }
+                            return [4 /*yield*/, releaser.release()];
+                        case 3:
+                            _c.sent();
+                            _c.label = 4;
+                        case 4:
+                            i++;
+                            return [3 /*break*/, 2];
+                        case 5:
+                            j++;
+                            return [3 /*break*/, 1];
+                        case 6: return [2 /*return*/];
+                    }
+                });
+            });
+        };
+        GerstnerPixelArt.prototype.updateSuperpixelMeans = function () {
+            var _a = this, outWidth = _a.outWidth, outHeight = _a.outHeight, releaser = _a.releaser, height = _a.height, width = _a.width;
+            var colorSums = util_1.array2d(outWidth, outHeight, function () { return 0; });
+            var posSums = util_1.array2d(outWidth, outHeight, function () { return 0; });
+            var weights = util_1.array2d(outWidth, outHeight, function () { return 0; });
+            var superpixel_weights_ = util_1.array2d(outWidth, outHeight, function () { return 0; });
+            for (var y = 0; y < height; y++) {
+                for (var x = 0; x < width; x++) {
+                    var superp;
+                    cv: : Vec2i;
+                    superpixel = region_map_.at < cv;
+                    Vec2i > (y, x);
+                    cv: : Vec3f;
+                    pixel_color = input_img_.at < cv;
+                    Vec3f > (y, x);
+                    color_sums.at < cv;
+                    Vec3f > (superpixel[1], superpixel[0]);
+                    pixel_color;
+                    pos_sums.at < cv;
+                    Vec2f > (superpixel[1], superpixel[0]);
+                    cv: : Vec2f((float), x, (float), y);
+                    weights.at(superpixel[1], superpixel[0]) += 1.0;
+                    f;
+                    superpixel_weights_.at(superpixel[1], superpixel[0]) +=
+                        input_weights_.at(y, x);
+                }
+            }
+        };
+        GerstnerPixelArt.prototype.iterate = function () {
+            return __awaiter(this, void 0, void 0, function () {
+                return __generator(this, function (_a) {
+                    switch (_a.label) {
+                        case 0:
+                            if (this.hasCompleted())
+                                return [2 /*return*/];
+                            return [4 /*yield*/, this.updateSuperPixelMapping()];
+                        case 1:
+                            _a.sent();
+                            return [2 /*return*/];
+                    }
+                });
+            });
+        };
+        GerstnerPixelArt.prototype.hasCompleted = function () {
+            return this.temperature <= 1;
+        };
+        GerstnerPixelArt.prototype.draw = function (canvas) {
+            return __awaiter(this, void 0, void 0, function () {
+                return __generator(this, function (_a) {
+                    return [2 /*return*/, []];
+                });
+            });
+        };
+        return GerstnerPixelArt;
+    }());
+    exports.default = GerstnerPixelArt;
+});
+define("naive", ["require", "exports", "util"], function (require, exports, util_2) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var NaivePixelArt = /** @class */ (function () {
@@ -265,18 +413,16 @@ define("naive", ["require", "exports", "util"], function (require, exports, util
             this.clusterMap = clusterMap;
         }
         NaivePixelArt.fromRandomPalette = function (paletteSize, pixelSize, releaser, pixels) {
-            var palette = __spread(Array(paletteSize).keys()).map(function () { return ({
+            var palette = util_2.array1d(paletteSize, function () { return ({
                 timesUsed: 0,
-                color: [util_1.randInt(256), util_1.randInt(256), util_1.randInt(256)],
+                color: [util_2.randInt(256), util_2.randInt(256), util_2.randInt(256)],
             }); });
-            var clusterMap = Array(pixels.length);
-            for (var i = 0; i < pixels.length; i++)
-                clusterMap[i] = Array(pixels[0].length).fill(util_1.randInt(paletteSize));
+            var clusterMap = util_2.array2d(pixels[0].length, pixels.length, function () { return util_2.randInt(paletteSize); });
             return new NaivePixelArt(palette, pixelSize, releaser, pixels, clusterMap);
         };
         NaivePixelArt.prototype.iterate = function () {
             return __awaiter(this, void 0, void 0, function () {
-                var distortion, _a, pixels, releaser, palette, clusterMap, centroids, j, row, _loop_1, i, j, row, i, _b, r, g, b, centroid;
+                var distortion, _a, pixels, releaser, palette, clusterMap, centroids, j, row, _loop_2, i, j, row, i, _b, r, g, b, centroid;
                 return __generator(this, function (_c) {
                     switch (_c.label) {
                         case 0:
@@ -288,14 +434,14 @@ define("naive", ["require", "exports", "util"], function (require, exports, util
                         case 1:
                             if (!(j < pixels.length)) return [3 /*break*/, 4];
                             row = pixels[j];
-                            _loop_1 = function (i) {
+                            _loop_2 = function (i) {
                                 var _a = __read(row[i], 3), r = _a[0], g = _a[1], b = _a[2];
-                                var _b = util_1.minWithIndex(centroids.map(function (c) { return util_1.distSquare(c, [r, g, b]); })), index = _b.index, val = _b.val;
+                                var _b = util_2.minWithIndex(centroids.map(function (c) { return util_2.distSquare(c, [r, g, b]); })), index = _b.index, val = _b.val;
                                 clusterMap[j][i] = index;
                                 distortion += val;
                             };
                             for (i = 0; i < row.length; i++) {
-                                _loop_1(i);
+                                _loop_2(i);
                             }
                             return [4 /*yield*/, releaser.release()];
                         case 2:
@@ -335,10 +481,9 @@ define("naive", ["require", "exports", "util"], function (require, exports, util
                             j++;
                             return [3 /*break*/, 5];
                         case 8:
-                            this.palette.forEach(function (x) {
+                            this.palette.forEach(function (x, i) {
                                 var _a = __read(x.color, 3), r = _a[0], g = _a[1], b = _a[2], t = x.timesUsed;
-                                if (t)
-                                    x.color = util_1.floorColor([r / t, g / t, b / t]);
+                                x.color = t ? util_2.floorColor([r / t, g / t, b / t]) : centroids[i];
                             });
                             return [2 /*return*/];
                     }
@@ -379,7 +524,7 @@ define("naive", ["require", "exports", "util"], function (require, exports, util
         };
         return NaivePixelArt;
     }());
-    exports.NaivePixelArt = NaivePixelArt;
+    exports.default = NaivePixelArt;
 });
 define("releaser", ["require", "exports"], function (require, exports) {
     "use strict";
@@ -471,7 +616,7 @@ define("index", ["require", "exports", "dom", "naive", "canvas", "releaser"], fu
                     dom_1.dom.canvasNn.height = dom_1.dom.canvasOrig.height;
                     canvas = new canvas_1.default(dom_1.dom.canvasNn);
                     pixels = (new canvas_1.default(dom_1.dom.canvasOrig)).getPixels();
-                    ns = naive_1.NaivePixelArt.fromRandomPalette(dom_1.dom.nnColors.valueAsNumber, dom_1.dom.nnFactor.valueAsNumber, releaser, pixels);
+                    ns = naive_1.default.fromRandomPalette(dom_1.dom.nnColors.valueAsNumber, dom_1.dom.nnFactor.valueAsNumber, releaser, pixels);
                     i = 1;
                     _a.label = 1;
                 case 1:
@@ -510,7 +655,7 @@ define("index", ["require", "exports", "dom", "naive", "canvas", "releaser"], fu
                     dom_1.dom.canvasGerstner.height = dom_1.dom.canvasOrig.height;
                     canvas = new canvas_1.default(dom_1.dom.canvasGerstner);
                     pixels = (new canvas_1.default(dom_1.dom.canvasOrig)).getPixels();
-                    ns = naive_1.NaivePixelArt.fromRandomPalette(dom_1.dom.gerstnerColors.valueAsNumber, dom_1.dom.gerstnerFactor.valueAsNumber, releaser, pixels);
+                    ns = naive_1.default.fromRandomPalette(dom_1.dom.gerstnerColors.valueAsNumber, dom_1.dom.gerstnerFactor.valueAsNumber, releaser, pixels);
                     i = 1;
                     _a.label = 1;
                 case 1:
@@ -538,7 +683,7 @@ define("index", ["require", "exports", "dom", "naive", "canvas", "releaser"], fu
         });
     }); };
 });
-define("mapping", ["require", "exports", "util", "releaser"], function (require, exports, util_2, releaser_2) {
+define("mapping", ["require", "exports", "util", "releaser"], function (require, exports, util_3, releaser_2) {
     "use strict";
     var _this = this;
     Object.defineProperty(exports, "__esModule", { value: true });
@@ -552,7 +697,7 @@ define("mapping", ["require", "exports", "util", "releaser"], function (require,
         cubes.forEach(function (x) { return x.setAttribute('style', "transform: rotateX(" + -ry + "deg) rotateY(" + rx + "deg)"); });
     };
     var fillFace = function (canvas, vectorFunc, mapFunc) {
-        if (mapFunc === void 0) { mapFunc = util_2.scaledLab2rgb; }
+        if (mapFunc === void 0) { mapFunc = util_3.scaledLab2rgb; }
         var ctx = canvas.getContext('2d');
         for (var j = 0; j < 255; j++) {
             for (var i = 0; i < 255; i++) {
@@ -563,7 +708,7 @@ define("mapping", ["require", "exports", "util", "releaser"], function (require,
         return canvas;
     };
     var fillFaces = function (canvases, mapFunc) {
-        if (mapFunc === void 0) { mapFunc = util_2.scaledLab2rgb; }
+        if (mapFunc === void 0) { mapFunc = util_3.scaledLab2rgb; }
         return __awaiter(_this, void 0, void 0, function () {
             return __generator(this, function (_a) {
                 switch (_a.label) {

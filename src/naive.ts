@@ -1,8 +1,8 @@
-import { randInt, floorColor, minWithIndex, distSquare } from './util'
+import { randInt, floorColor, minWithIndex, distSquare, array1d, array2d } from './util'
 import { PixelArtAlgorithm, Canvas, RgbColor, Palette, EventLoopReleaser, RgbaColor } from './types'
 
 
-export class NaivePixelArt implements PixelArtAlgorithm {
+export default class NaivePixelArt implements PixelArtAlgorithm {
   readonly releaser: EventLoopReleaser
   readonly pixelSize: number
   readonly pixels: RgbaColor[][]
@@ -22,13 +22,11 @@ export class NaivePixelArt implements PixelArtAlgorithm {
 
   static fromRandomPalette(paletteSize: number, pixelSize: number,
     releaser: EventLoopReleaser, pixels: RgbaColor[][]) {
-    const palette = [...Array(paletteSize).keys()].map(() => ({
+    const palette = array1d(paletteSize, () => ({
       timesUsed: 0,
       color: [randInt(256), randInt(256), randInt(256)] as RgbColor,
     }))
-    const clusterMap = Array(pixels.length)
-    for (let i = 0; i < pixels.length; i++)
-      clusterMap[i] = Array(pixels[0].length).fill(randInt(paletteSize))
+    const clusterMap = array2d(pixels[0].length, pixels.length, () => randInt(paletteSize))
     return new NaivePixelArt(palette, pixelSize, releaser, pixels, clusterMap)
   }
 
@@ -67,9 +65,9 @@ export class NaivePixelArt implements PixelArtAlgorithm {
       }
       await releaser.release()
     }
-    this.palette.forEach(x => {
+    this.palette.forEach((x, i) => {
       const { color: [r, g, b], timesUsed: t } = x
-      if (t) x.color = floorColor([r / t, g / t, b / t])
+      x.color = t ? floorColor([r / t, g / t, b / t]) : centroids[i]
     })
   }
 

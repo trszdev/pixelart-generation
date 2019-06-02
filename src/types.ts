@@ -3,6 +3,7 @@ export type RgbaColor = [Uint8, Uint8, Uint8, Uint8]
 export type RgbColor = [Uint8, Uint8, Uint8]
 export type Palette = { timesUsed: number, color: RgbColor }[]
 export type LabColor = [number, number, number]
+export type Point = [number, number]
 
 export interface Canvas {
   fillRect(x: number, y: number, w: number, h: number, color: RgbaColor)

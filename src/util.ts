@@ -17,6 +17,16 @@ export const normEuclidian = (v: any[]) => Math.sqrt(normSquare(v))
 
 export const distSquare = (from: any[], to: any[]) => normSquare(diff(from, to))
 
+export const dist = (from: any[], to: any[]) => normEuclidian(diff(from, to))
+
+export const array1d = (size: number, filler: (i?: number) => any): any[] => [...Array(size).keys()].map(filler)
+
+export const array2d = (width: number, height: number, filler: (i?: number, j?: number) => any): any[][] => {
+  const result = Array(height)
+  for (let y = 0; y < height; y++) result[y] = array1d(width, x => filler(x, y))
+  return result
+}
+
 export const minWithIndex = (v: number[]) => {
   const [index, val] = v.reduce(([mi, mx], x, i) => mx > x ? [i, x] : [mi, mx], [-1, Number.MAX_VALUE])
   return { index, val }

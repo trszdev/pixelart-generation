@@ -1,5 +1,5 @@
 import { dom, fillPalette, setProgress, ButtonProcess } from './dom'
-import { NaivePixelArt } from './naive'
+import NaivePixelArt from './naive'
 import WrappedHtmlCanvas from './canvas'
 import { AnimationFrameReleaser } from './releaser'
 
