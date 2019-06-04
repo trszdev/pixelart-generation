@@ -195,10 +195,12 @@ define("util", ["require", "exports"], function (require, exports) {
     exports.clamp = function (val, min, max) { return Math.max(Math.min(max, val), min); };
     exports.floorColor = function (c) { return c.map(function (x) { return exports.clamp(Math.round(x), 0, 255); }); };
     exports.diff = function (from, what) { return from.map(function (x, i) { return x - what[i]; }); };
+    exports.add = function (to, what) { return to.forEach(function (_, i) { return to[i] += what[i]; }); };
     exports.normSquare = function (v) { return v.reduce(function (acc, x) { return acc + x * x; }, 0); };
     exports.normEuclidian = function (v) { return Math.sqrt(exports.normSquare(v)); };
     exports.distSquare = function (from, to) { return exports.normSquare(exports.diff(from, to)); };
     exports.dist = function (from, to) { return exports.normEuclidian(exports.diff(from, to)); };
+    exports.gaussian = function (r, sigma) { return (Math.exp(-(r * r) / sigma)) / (Math.PI * sigma); };
     exports.array1d = function (size, filler) { return __spread(Array(size).keys()).map(filler); };
     exports.array2d = function (width, height, filler) {
         var result = Array(height);
@@ -283,110 +285,521 @@ define("gerstner", ["require", "exports", "util"], function (require, exports, u
     }());
     exports.LaplaceSmoothFilter = LaplaceSmoothFilter;
     var GerstnerPixelArt = /** @class */ (function () {
-        function GerstnerPixelArt(temperature, pixelSize, bilateralFilter, laplaceFilter, slicTolerance) {
-            if (slicTolerance === void 0) { slicTolerance = 45; }
-            this.paleteWasFilled = false;
-            this.temperature = temperature;
-            this.slicTolerance = slicTolerance;
-            this.bilateralFilter = bilateralFilter;
-            this.laplaceFilter = laplaceFilter;
+        function GerstnerPixelArt() {
+            var _this = this;
+            this.vec2idx = function (_a) {
+                var _b = __read(_a, 2), x = _b[0], y = _b[1];
+                return x + _this.outWidth * y;
+            };
         }
-        GerstnerPixelArt.prototype.setPaletteToAverage = function () {
-            // set palette to average Pix::GetAveragedPalette()
+        GerstnerPixelArt.prototype.getAveragedPalette = function () {
+            if (this.palette_maxed_flag_)
+                return this.palette;
+            var averagedPalette = this.palette; // TODO
+            var _loop_2 = function (i) {
+                var _a = __read(this_1.sub_superpixel_pairs[i], 2), index1 = _a[0], index2 = _a[1];
+                var color1 = this_1.palette[index1];
+                var color2 = this_1.palette[index2];
+                var weight1 = this_1.prob_c[index1];
+                var weight2 = this_1.prob_c[index2];
+                var totalWeight = weight1 + weight2;
+                weight1 /= totalWeight;
+                weight2 /= totalWeight;
+                var averagedColor = color1.map(function (c, i) { return c * weight1 + color2[i] * weight2; });
+                averagedPalette[index1] = averagedColor;
+                averagedPalette[index2] = averagedColor;
+            };
+            var this_1 = this;
+            for (var i = 0; i < this.sub_superpixel_pairs.length; ++i) {
+                _loop_2(i);
+            }
+            return averagedPalette;
         };
         GerstnerPixelArt.prototype.updateSuperPixelMapping = function () {
             return __awaiter(this, void 0, void 0, function () {
-                var dmap, _a, outHeight, outWidth, width, height, regionMap, slicRadius, input, slicTolerance, palette, releaser, j, i, _b, x, y, color, maxX, maxY, minX, minY, labColor, xx, yy, colorDist, d;
-                return __generator(this, function (_c) {
-                    switch (_c.label) {
+                var averagedPalette, distance, y, x, pos, minX, minY, maxX, maxY, superpixelColor, yy, xx, colorError, distError, error, y, x, i, j;
+                return __generator(this, function (_a) {
+                    switch (_a.label) {
                         case 0:
-                            this.setPaletteToAverage();
-                            this.regionMap = util_1.array2d(this.width, this.height, function () { return null; });
-                            dmap = util_1.array2d(this.width, this.height, function () { return Number.MAX_VALUE; });
-                            _a = this, outHeight = _a.outHeight, outWidth = _a.outWidth, width = _a.width, height = _a.height, regionMap = _a.regionMap, slicRadius = _a.slicRadius, input = _a.input, slicTolerance = _a.slicTolerance, palette = _a.palette, releaser = _a.releaser;
-                            j = 1;
-                            _c.label = 1;
+                            this.region_map = util_1.array2d(this.width, this.height, function () { return [-1, 0]; });
+                            averagedPalette = this.getAveragedPalette();
+                            distance = util_1.array2d(this.width, this.height, function () { return -5; });
+                            y = 0;
+                            _a.label = 1;
                         case 1:
-                            if (!(j < outHeight - 1)) return [3 /*break*/, 6];
-                            i = 1;
-                            _c.label = 2;
-                        case 2:
-                            if (!(i < outWidth - 1)) return [3 /*break*/, 5];
-                            _b = this.centroids[j][i], x = _b.x, y = _b.y, color = _b.color;
-                            maxX = Math.min(width - 1, x + slicRadius);
-                            maxY = Math.min(height - 1, y + slicRadius);
-                            minX = Math.floor(Math.max(0, x - slicRadius));
-                            minY = Math.floor(Math.max(0, y - slicRadius));
-                            labColor = palette[color];
-                            for (xx = Math.floor(minX); xx <= maxX; xx++)
-                                for (yy = Math.floor(minY); yy <= maxY; yy++) {
-                                    colorDist = util_1.dist(labColor, input[yy][xx]);
-                                    d = colorDist + slicTolerance * slicRadius * util_1.dist([xx, yy], [x, y]);
-                                    if (d < dmap[yy][xx]) {
-                                        dmap[yy][xx] = d;
-                                        regionMap[yy][xx] = [x, y];
+                            if (!(y < this.outHeight)) return [3 /*break*/, 4];
+                            for (x = 0; x < this.outWidth; ++x) {
+                                pos = this.superpixel_pos[y][x];
+                                minX = Math.max(0, Math.floor(pos[0] - this.range_));
+                                minY = Math.max(0, Math.floor(pos[1] - this.range_));
+                                maxX = Math.min(this.width - 1, pos[0] + this.range_);
+                                maxY = Math.min(this.height - 1, pos[1] + this.range_);
+                                superpixelColor = averagedPalette[this.palette_assign[y][x]];
+                                for (yy = minY; yy <= maxY; ++yy) {
+                                    for (xx = minX; xx <= maxX; ++xx) {
+                                        colorError = util_1.dist(this.input[yy][xx], superpixelColor);
+                                        distError = util_1.dist(pos, [xx, yy]);
+                                        error = colorError + this.slicTolerance / this.range_ * distError;
+                                        if (distance[yy][xx] < 0 || error < distance[yy][xx]) {
+                                            distance[yy][xx] = error;
+                                            this.region_map[yy][xx] = [x, y];
+                                        }
                                     }
                                 }
-                            return [4 /*yield*/, releaser.release()];
+                            }
+                            return [4 /*yield*/, this.releaser.release()];
+                        case 2:
+                            _a.sent();
+                            _a.label = 3;
                         case 3:
-                            _c.sent();
-                            _c.label = 4;
-                        case 4:
-                            i++;
-                            return [3 /*break*/, 2];
-                        case 5:
-                            j++;
+                            ++y;
                             return [3 /*break*/, 1];
-                        case 6: return [2 /*return*/];
+                        case 4:
+                            y = 0;
+                            _a.label = 5;
+                        case 5:
+                            if (!(y < this.height)) return [3 /*break*/, 8];
+                            for (x = 0; x < this.width; ++x) {
+                                if (this.region_map[y][x][0] === -1) { // TODO
+                                    i = Math.floor(x / this.width * this.outWidth);
+                                    j = Math.floor(y / this.height * this.outHeight);
+                                    this.region_map[y][x] = [i, j];
+                                }
+                            }
+                            return [4 /*yield*/, this.releaser.release()];
+                        case 6:
+                            _a.sent();
+                            _a.label = 7;
+                        case 7:
+                            ++y;
+                            return [3 /*break*/, 5];
+                        case 8: return [2 /*return*/];
                     }
                 });
             });
         };
         GerstnerPixelArt.prototype.updateSuperpixelMeans = function () {
-            var _a = this, outWidth = _a.outWidth, outHeight = _a.outHeight, releaser = _a.releaser, height = _a.height, width = _a.width;
-            var colorSums = util_1.array2d(outWidth, outHeight, function () { return 0; });
-            var posSums = util_1.array2d(outWidth, outHeight, function () { return 0; });
-            var weights = util_1.array2d(outWidth, outHeight, function () { return 0; });
-            var superpixel_weights_ = util_1.array2d(outWidth, outHeight, function () { return 0; });
-            for (var y = 0; y < height; y++) {
-                for (var x = 0; x < width; x++) {
-                    var superp;
-                    cv: : Vec2i;
-                    superpixel = region_map_.at < cv;
-                    Vec2i > (y, x);
-                    cv: : Vec3f;
-                    pixel_color = input_img_.at < cv;
-                    Vec3f > (y, x);
-                    color_sums.at < cv;
-                    Vec3f > (superpixel[1], superpixel[0]);
-                    pixel_color;
-                    pos_sums.at < cv;
-                    Vec2f > (superpixel[1], superpixel[0]);
-                    cv: : Vec2f((float), x, (float), y);
-                    weights.at(superpixel[1], superpixel[0]) += 1.0;
-                    f;
-                    superpixel_weights_.at(superpixel[1], superpixel[0]) +=
-                        input_weights_.at(y, x);
-                }
-            }
-        };
-        GerstnerPixelArt.prototype.iterate = function () {
             return __awaiter(this, void 0, void 0, function () {
-                return __generator(this, function (_a) {
-                    switch (_a.label) {
+                var colorSums, posSums, weights, y, x, _a, sx, sy, totalWeight, y, _loop_3, this_2, x, y, x;
+                return __generator(this, function (_b) {
+                    switch (_b.label) {
                         case 0:
-                            if (this.hasCompleted())
-                                return [2 /*return*/];
-                            return [4 /*yield*/, this.updateSuperPixelMapping()];
+                            colorSums = util_1.array2d(this.outWidth, this.outHeight, function () { return [0, 0, 0]; });
+                            posSums = util_1.array2d(this.outWidth, this.outHeight, function () { return [0, 0]; });
+                            weights = util_1.array2d(this.outWidth, this.outHeight, function () { return 0; });
+                            this.superpixel_weights_ = util_1.array2d(this.outWidth, this.outHeight, function () { return 0; });
+                            y = 0;
+                            _b.label = 1;
                         case 1:
-                            _a.sent();
+                            if (!(y < this.height)) return [3 /*break*/, 4];
+                            for (x = 0; x < this.width; ++x) {
+                                _a = __read(this.region_map[y][x], 2), sx = _a[0], sy = _a[1];
+                                util_1.add(colorSums[sy][sx], this.input[y][x]);
+                                util_1.add(posSums[sy][sx], [x, y]);
+                                weights[sy][sx]++;
+                                this.superpixel_weights_[sy][sx] += this.input_weights_[y][x];
+                            }
+                            return [4 /*yield*/, this.releaser.release()];
+                        case 2:
+                            _b.sent();
+                            _b.label = 3;
+                        case 3:
+                            ++y;
+                            return [3 /*break*/, 1];
+                        case 4:
+                            totalWeight = 0;
+                            y = 0;
+                            _b.label = 5;
+                        case 5:
+                            if (!(y < this.outHeight)) return [3 /*break*/, 8];
+                            _loop_3 = function (x) {
+                                var w = weights[y][x];
+                                if (w === 0) {
+                                    var inputX = Math.floor(x / this_2.outWidth * this_2.width);
+                                    var inputY = Math.floor(y / this_2.outHeight * this_2.height);
+                                    this_2.superpixel_color[y][x] = this_2.input[inputY][inputX];
+                                }
+                                else {
+                                    this_2.superpixel_color[y][x] = colorSums[y][x].map(function (c) { return c / w; });
+                                    this_2.superpixel_pos[y][x] = posSums[y][x].map(function (p) { return p / w; });
+                                    this_2.superpixel_weights_[y][x] /= w;
+                                    totalWeight += this_2.superpixel_weights_[y][x];
+                                }
+                            };
+                            this_2 = this;
+                            for (x = 0; x < this.outWidth; ++x) {
+                                _loop_3(x);
+                            }
+                            return [4 /*yield*/, this.releaser.release()];
+                        case 6:
+                            _b.sent();
+                            _b.label = 7;
+                        case 7:
+                            ++y;
+                            return [3 /*break*/, 5];
+                        case 8:
+                            for (y = 0; y < this.outHeight; ++y) {
+                                for (x = 0; x < this.outWidth; ++x)
+                                    this.superpixel_weights_[y][x] /= totalWeight;
+                            }
+                            return [4 /*yield*/, this.smoothSuperpixelPositions()];
+                        case 9:
+                            _b.sent();
+                            return [4 /*yield*/, this.smoothSuperpixelColors()];
+                        case 10:
+                            _b.sent();
                             return [2 /*return*/];
                     }
                 });
             });
         };
+        GerstnerPixelArt.prototype.smoothSuperpixelColors = function () {
+            return __awaiter(this, void 0, void 0, function () {
+                var new_superpixel_colors, i, _loop_4, this_3, j;
+                return __generator(this, function (_a) {
+                    switch (_a.label) {
+                        case 0:
+                            new_superpixel_colors = util_1.array2d(this.outWidth, this.outHeight, function () { return [0, 0, 0]; });
+                            i = 0;
+                            _a.label = 1;
+                        case 1:
+                            if (!(i < this.outWidth)) return [3 /*break*/, 4];
+                            _loop_4 = function (j) {
+                                var min_x = Math.max(0, i - 1);
+                                var max_x = Math.min(this_3.outWidth - 1, i + 1);
+                                var min_y = Math.max(0, j - 1);
+                                var max_y = Math.min(this_3.outHeight - 1, j + 1);
+                                var sum = [0, 0, 0];
+                                var weight = 0;
+                                var sc = this_3.superpixel_color[j][i];
+                                for (var ii = min_x; ii <= max_x; ++ii) {
+                                    var _loop_5 = function (jj) {
+                                        var c_n = this_3.superpixel_color[jj][ii];
+                                        var w_color = util_1.gaussian(util_1.dist(sc, c_n), this_3.sigma_color_);
+                                        var w_pos = util_1.gaussian(util_1.dist([i, j], [ii, jj]), this_3.sigma_position_);
+                                        var w_total = w_color * w_pos;
+                                        util_1.add(sum, c_n.map(function (x) { return x * w_total; }));
+                                        weight += w_total;
+                                    };
+                                    for (var jj = min_y; jj <= max_y; ++jj) {
+                                        _loop_5(jj);
+                                    }
+                                }
+                                new_superpixel_colors[j][i] = sum.map(function (x) { return x / weight; });
+                            };
+                            this_3 = this;
+                            for (j = 0; j < this.outHeight; ++j) {
+                                _loop_4(j);
+                            }
+                            return [4 /*yield*/, this.releaser.release()];
+                        case 2:
+                            _a.sent();
+                            _a.label = 3;
+                        case 3:
+                            ++i;
+                            return [3 /*break*/, 1];
+                        case 4:
+                            this.superpixel_color = new_superpixel_colors;
+                            return [2 /*return*/];
+                    }
+                });
+            });
+        };
+        GerstnerPixelArt.prototype.associatePalette = function () {
+            return __awaiter(this, void 0, void 0, function () {
+                var new_prob_c, overT, _loop_6, this_4, y;
+                var _this = this;
+                return __generator(this, function (_a) {
+                    switch (_a.label) {
+                        case 0:
+                            new_prob_c = util_1.array1d(this.palette.length, function () { return 0; });
+                            this.prob_co_ = util_1.array2d(this.outHeight * this.outWidth, this.palette.length, function () { return 0; });
+                            overT = -1 / this.temperature_;
+                            _loop_6 = function (y) {
+                                var _loop_7, x;
+                                return __generator(this, function (_a) {
+                                    switch (_a.label) {
+                                        case 0:
+                                            _loop_7 = function (x) {
+                                                var probs = [];
+                                                var pixel = this_4.superpixel_color[y][x];
+                                                var sum_prob = 0;
+                                                var index = util_1.minWithIndex(this_4.palette.map(function (c, i) {
+                                                    var color_error = util_1.dist(c, pixel);
+                                                    var prob = _this.prob_c[i] * Math.exp(color_error * overT);
+                                                    probs.push(prob);
+                                                    sum_prob += prob;
+                                                    return color_error;
+                                                })).index;
+                                                this_4.palette_assign[y][x] = index;
+                                                var prob_sp = this_4.superpixel_weights_[y][x];
+                                                probs.forEach(function (p, i) {
+                                                    var normalized_prob = p / sum_prob;
+                                                    _this.prob_co_[i][_this.vec2idx([x, y])] = normalized_prob;
+                                                    new_prob_c[i] += prob_sp * normalized_prob;
+                                                });
+                                            };
+                                            for (x = 0; x < this_4.outWidth; ++x) {
+                                                _loop_7(x);
+                                            }
+                                            return [4 /*yield*/, this_4.releaser.release()];
+                                        case 1:
+                                            _a.sent();
+                                            return [2 /*return*/];
+                                    }
+                                });
+                            };
+                            this_4 = this;
+                            y = 0;
+                            _a.label = 1;
+                        case 1:
+                            if (!(y < this.outHeight)) return [3 /*break*/, 4];
+                            return [5 /*yield**/, _loop_6(y)];
+                        case 2:
+                            _a.sent();
+                            _a.label = 3;
+                        case 3:
+                            ++y;
+                            return [3 /*break*/, 1];
+                        case 4:
+                            this.prob_c = new_prob_c;
+                            return [2 /*return*/];
+                    }
+                });
+            });
+        };
+        GerstnerPixelArt.prototype.smoothSuperpixelPositions = function () {
+            return __awaiter(this, void 0, void 0, function () {
+                var new_superpixel_pos, i, j, sum, count, orig, nPos;
+                return __generator(this, function (_a) {
+                    switch (_a.label) {
+                        case 0:
+                            new_superpixel_pos = util_1.array2d(this.outWidth, this.outHeight, function () { return [0, 0]; });
+                            i = 0;
+                            _a.label = 1;
+                        case 1:
+                            if (!(i < this.outWidth)) return [3 /*break*/, 4];
+                            for (j = 0; j < this.outHeight; ++j) {
+                                sum = [0, 0];
+                                count = 0;
+                                if (i > 0) {
+                                    util_1.add(sum, this.superpixel_pos[j][i - 1]);
+                                    count++;
+                                }
+                                if (i < this.outWidth - 1) {
+                                    util_1.add(sum, this.superpixel_pos[j][i + 1]);
+                                    count++;
+                                }
+                                if (j > 0) {
+                                    util_1.add(sum, this.superpixel_pos[j - 1][i]);
+                                    count++;
+                                }
+                                if (j < this.outHeight - 1) {
+                                    util_1.add(sum, this.superpixel_pos[j + 1][i]);
+                                    count++;
+                                }
+                                sum[0] /= count;
+                                sum[1] /= count;
+                                orig = this.superpixel_pos[j][i];
+                                nPos = [0, 0];
+                                if (i === 0 || i === this.outWidth - 1) {
+                                    nPos[0] = orig[0];
+                                }
+                                else {
+                                    nPos[0] = (1.0 - this.smooth_pos_factor_) * orig[0] + this.smooth_pos_factor_ * sum[0];
+                                }
+                                if (j === 0 || j === this.outHeight - 1) {
+                                    nPos[1] = orig[1];
+                                }
+                                else {
+                                    nPos[1] = (1.0 - this.smooth_pos_factor_) * orig[1] + this.smooth_pos_factor_ * sum[1];
+                                }
+                                new_superpixel_pos[j][i] = nPos;
+                            }
+                            return [4 /*yield*/, this.releaser.release()];
+                        case 2:
+                            _a.sent();
+                            _a.label = 3;
+                        case 3:
+                            ++i;
+                            return [3 /*break*/, 1];
+                        case 4:
+                            this.superpixel_pos = new_superpixel_pos;
+                            return [2 /*return*/];
+                    }
+                });
+            });
+        };
+        GerstnerPixelArt.prototype.refinePalette = function () {
+            return __awaiter(this, void 0, void 0, function () {
+                var color_sums, _loop_8, this_5, y, palette_error;
+                var _this = this;
+                return __generator(this, function (_a) {
+                    switch (_a.label) {
+                        case 0:
+                            color_sums = util_1.array1d(this.palette.length, function () { return [0, 0, 0]; });
+                            _loop_8 = function (y) {
+                                var _loop_9, x;
+                                return __generator(this, function (_a) {
+                                    switch (_a.label) {
+                                        case 0:
+                                            _loop_9 = function (x) {
+                                                var prob_sb = this_5.superpixel_weights_[y][x];
+                                                var pixel_color = this_5.superpixel_color[y][x];
+                                                this_5.palette.forEach(function (_, i) {
+                                                    var w = prob_sb * _this.prob_co_[i][_this.vec2idx([x, y])];
+                                                    util_1.add(color_sums[i], pixel_color.map(function (x) { return x * w; }));
+                                                });
+                                            };
+                                            for (x = 0; x < this_5.outWidth; ++x) {
+                                                _loop_9(x);
+                                            }
+                                            return [4 /*yield*/, this_5.releaser.release()];
+                                        case 1:
+                                            _a.sent();
+                                            return [2 /*return*/];
+                                    }
+                                });
+                            };
+                            this_5 = this;
+                            y = 0;
+                            _a.label = 1;
+                        case 1:
+                            if (!(y < this.outHeight)) return [3 /*break*/, 4];
+                            return [5 /*yield**/, _loop_8(y)];
+                        case 2:
+                            _a.sent();
+                            _a.label = 3;
+                        case 3:
+                            ++y;
+                            return [3 /*break*/, 1];
+                        case 4:
+                            palette_error = 0;
+                            this.palette.forEach(function (c, i) {
+                                if (_this.prob_c[i] > 0) {
+                                    var new_color = color_sums[i].map(function (x) { return x / _this.prob_c[i]; });
+                                    palette_error += util_1.dist(c, new_color);
+                                    _this.palette[i] = new_color;
+                                }
+                            });
+                            return [2 /*return*/, palette_error];
+                    }
+                });
+            });
+        };
+        GerstnerPixelArt.prototype.getMaxEigen = function (palette_index) {
+            return __awaiter(this, void 0, void 0, function () {
+                return __generator(this, function (_a) {
+                    return [2 /*return*/];
+                });
+            });
+        };
+        GerstnerPixelArt.prototype.splitColor = function (index) {
+            //remove subsuperpixels if max palette size is reached
+            //and represent each color as a single superpixel
+            var _a = __read(this.sub_superpixel_pairs[index], 2), index1 = _a[0], index2 = _a[1];
+            var nextIndex1 = this.palette.length;
+            var nextIndex2 = nextIndex1 + 1;
+            var color1 = this.palette[index1];
+            var color2 = this.palette[index2];
+            var sub_color1 = 1;
+            //create a subsuperpixel for each of the two new
+            //colors, set to slight permutations of the
+            //old subsuperpixels' colors
+            /*
+            cv::Vec3f subcluster_color_1 =
+              color_1 + GetMaxEigen(index_1).first*kSubclusterPertubation;
+            cv::Vec3f subcluster_color_2 =
+              color_2 + GetMaxEigen(index_2).first*kSubclusterPertubation;
+        
+            //reconstruct first pair
+            GetCurrentState()->palette.push_back(subcluster_color_1);
+            GetCurrentState()->sub_superpixel_pairs[pair_index].second = next_index1;
+            GetCurrentState()->prob_c[index_1]*=.5f;
+            GetCurrentState()->prob_c.push_back(GetCurrentState()->prob_c[index_1]);
+            prob_co_.push_back(prob_co_[index_1]);
+        
+            //reconstruct second pair
+            GetCurrentState()->palette.push_back(subcluster_color_2);
+            std::pair<int,int> new_pair(index_2, next_index2);
+            GetCurrentState()->sub_superpixel_pairs.push_back(new_pair);
+            GetCurrentState()->prob_c[index_2]*=.5f;
+            GetCurrentState()->prob_c.push_back(GetCurrentState()->prob_c[index_2]);
+            prob_co_.push_back(prob_co_[index_2]);
+            */
+        };
+        GerstnerPixelArt.prototype.condensePalette = function () {
+        };
+        GerstnerPixelArt.prototype.expandPalette = function () {
+            return __awaiter(this, void 0, void 0, function () {
+                var splits, index, _a, index1, index2, color1, color2, error, i;
+                return __generator(this, function (_b) {
+                    if (this.palette_maxed_flag_)
+                        return [2 /*return*/];
+                    splits = [];
+                    for (index = 0; index < this.palette.length; ++index) {
+                        _a = __read(this.sub_superpixel_pairs[index], 2), index1 = _a[0], index2 = _a[1];
+                        color1 = this.palette[index1];
+                        color2 = this.palette[index2];
+                        error = util_1.dist(color1, color2);
+                        if (error > 1.6) {
+                            splits.push([error, index]);
+                        }
+                        else {
+                            // GetCurrentState()->palette[index_2] += 
+                            //  GetMaxEigen(index_1).first*kSubclusterPertubation;
+                            util_1.add(this.palette[index2], [].map(function (x) { return x * 0.8; }));
+                        }
+                    }
+                    splits.sort(function (a, b) { return b[0] - a[0]; });
+                    for (i = 0; i < splits.length; i++) {
+                        this.splitColor(splits[i][1]);
+                        if (this.palette.length >= 2 * this.max_palette_size_) {
+                            this.condensePalette();
+                            return [2 /*return*/];
+                        }
+                    }
+                    return [2 /*return*/];
+                });
+            });
+        };
+        GerstnerPixelArt.prototype.iterate = function () {
+            return __awaiter(this, void 0, void 0, function () {
+                var paletteError;
+                return __generator(this, function (_a) {
+                    switch (_a.label) {
+                        case 0:
+                            if (this.converged_flag_)
+                                return [2 /*return*/];
+                            return [4 /*yield*/, this.updateSuperPixelMapping()];
+                        case 1:
+                            _a.sent();
+                            return [4 /*yield*/, this.updateSuperpixelMeans()];
+                        case 2:
+                            _a.sent();
+                            return [4 /*yield*/, this.associatePalette()];
+                        case 3:
+                            _a.sent();
+                            return [4 /*yield*/, this.refinePalette()];
+                        case 4:
+                            paletteError = _a.sent();
+                            if (!(paletteError < 1)) return [3 /*break*/, 6];
+                            this.temperature_ = Math.max(1, this.temperature_ * 0.7);
+                            if (this.temperature_ <= 1)
+                                this.converged_flag_ = true;
+                            else
+                                this.temperature_ = Math.max(this.temperature_ * 0.7, 1);
+                            return [4 /*yield*/, this.expandPalette()];
+                        case 5:
+                            _a.sent();
+                            _a.label = 6;
+                        case 6: return [2 /*return*/];
+                    }
+                });
+            });
+        };
         GerstnerPixelArt.prototype.hasCompleted = function () {
-            return this.temperature <= 1;
+            return this.converged_flag_;
         };
         GerstnerPixelArt.prototype.draw = function (canvas) {
             return __awaiter(this, void 0, void 0, function () {
@@ -422,31 +835,31 @@ define("naive", ["require", "exports", "util"], function (require, exports, util
         };
         NaivePixelArt.prototype.iterate = function () {
             return __awaiter(this, void 0, void 0, function () {
-                var distortion, _a, pixels, releaser, palette, clusterMap, centroids, j, row, _loop_2, i, j, row, i, _b, r, g, b, centroid;
-                return __generator(this, function (_c) {
-                    switch (_c.label) {
+                var distortion, _a, pixels, releaser, palette, clusterMap, centroids, j, row, _loop_10, i, j, row, i, centroid;
+                return __generator(this, function (_b) {
+                    switch (_b.label) {
                         case 0:
                             distortion = 0;
                             _a = this, pixels = _a.pixels, releaser = _a.releaser, palette = _a.palette, clusterMap = _a.clusterMap;
                             centroids = palette.map(function (x) { return x.color; });
                             j = 0;
-                            _c.label = 1;
+                            _b.label = 1;
                         case 1:
                             if (!(j < pixels.length)) return [3 /*break*/, 4];
                             row = pixels[j];
-                            _loop_2 = function (i) {
+                            _loop_10 = function (i) {
                                 var _a = __read(row[i], 3), r = _a[0], g = _a[1], b = _a[2];
                                 var _b = util_2.minWithIndex(centroids.map(function (c) { return util_2.distSquare(c, [r, g, b]); })), index = _b.index, val = _b.val;
                                 clusterMap[j][i] = index;
                                 distortion += val;
                             };
                             for (i = 0; i < row.length; i++) {
-                                _loop_2(i);
+                                _loop_10(i);
                             }
                             return [4 /*yield*/, releaser.release()];
                         case 2:
-                            _c.sent();
-                            _c.label = 3;
+                            _b.sent();
+                            _b.label = 3;
                         case 3:
                             j++;
                             return [3 /*break*/, 1];
@@ -461,22 +874,19 @@ define("naive", ["require", "exports", "util"], function (require, exports, util
                                 x.color = [0, 0, 0];
                             });
                             j = 0;
-                            _c.label = 5;
+                            _b.label = 5;
                         case 5:
                             if (!(j < pixels.length)) return [3 /*break*/, 8];
                             row = pixels[j];
                             for (i = 0; i < row.length; i++) {
-                                _b = __read(row[i], 3), r = _b[0], g = _b[1], b = _b[2];
                                 centroid = this.palette[clusterMap[j][i]];
-                                centroid.color[0] += r;
-                                centroid.color[1] += g;
-                                centroid.color[2] += b;
+                                util_2.add(centroid.color, row[i]);
                                 centroid.timesUsed++;
                             }
                             return [4 /*yield*/, releaser.release()];
                         case 6:
-                            _c.sent();
-                            _c.label = 7;
+                            _b.sent();
+                            _b.label = 7;
                         case 7:
                             j++;
                             return [3 /*break*/, 5];

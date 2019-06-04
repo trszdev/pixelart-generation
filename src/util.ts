@@ -11,6 +11,8 @@ export const floorColor = (c: RgbColor) => <RgbColor>c.map(x => clamp(Math.round
 
 export const diff = (from: any[], what: any[]) => from.map((x, i) => x - what[i])
 
+export const add = (to: any[], what: any[]) => to.forEach((_, i) => to[i] += what[i])
+
 export const normSquare = (v: any[]) => v.reduce((acc, x) => acc + x * x, 0)
 
 export const normEuclidian = (v: any[]) => Math.sqrt(normSquare(v))
@@ -19,9 +21,11 @@ export const distSquare = (from: any[], to: any[]) => normSquare(diff(from, to))
 
 export const dist = (from: any[], to: any[]) => normEuclidian(diff(from, to))
 
-export const array1d = (size: number, filler: (i?: number) => any): any[] => [...Array(size).keys()].map(filler)
+export const gaussian = (r: number, sigma: number) => (Math.exp(-(r * r) / sigma)) / (Math.PI * sigma)
 
-export const array2d = (width: number, height: number, filler: (i?: number, j?: number) => any): any[][] => {
+export const array1d = <T>(size: number, filler: (i?: number) => T): T[] => [...Array(size).keys()].map(filler)
+
+export const array2d = <T>(width: number, height: number, filler: (i?: number, j?: number) => T): T[][] => {
   const result = Array(height)
   for (let y = 0; y < height; y++) result[y] = array1d(width, x => filler(x, y))
   return result

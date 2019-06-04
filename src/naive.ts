@@ -1,4 +1,4 @@
-import { randInt, floorColor, minWithIndex, distSquare, array1d, array2d } from './util'
+import { randInt, floorColor, minWithIndex, distSquare, array1d, array2d, add } from './util'
 import { PixelArtAlgorithm, Canvas, RgbColor, Palette, EventLoopReleaser, RgbaColor } from './types'
 
 
@@ -56,11 +56,8 @@ export default class NaivePixelArt implements PixelArtAlgorithm {
     for (let j = 0; j < pixels.length; j++) {
       const row = pixels[j]
       for (let i = 0; i < row.length; i++) {
-        const [r, g, b] = row[i]
         const centroid = this.palette[clusterMap[j][i]]
-        centroid.color[0] += r
-        centroid.color[1] += g
-        centroid.color[2] += b
+        add(centroid.color, row[i])
         centroid.timesUsed++
       }
       await releaser.release()
