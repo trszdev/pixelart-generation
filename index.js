@@ -49,10 +49,6 @@ var __generator = (this && this.__generator) || function (thisArg, body) {
         if (op[0] & 5) throw op[1]; return { value: op[0] ? op[1] : void 0, done: true };
     }
 };
-var __spread = (this && this.__spread) || function () {
-    for (var ar = [], i = 0; i < arguments.length; i++) ar = ar.concat(__read(arguments[i]));
-    return ar;
-};
 define("types", ["require", "exports"], function (require, exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
@@ -141,7 +137,6 @@ define("dom", ["require", "exports"], function (require, exports) {
         exports.clearChildren(domPalette);
         var paletteCopy = palette.map(function (x) { return x; });
         var allUsage = paletteCopy.reduce(function (acc, x) { return acc + x.timesUsed; }, 0);
-        paletteCopy.sort(function (a, b) { return b.timesUsed - a.timesUsed; });
         paletteCopy.forEach(function (_a) {
             var u = _a.timesUsed, _b = __read(_a.color, 3), r = _b[0], g = _b[1], b = _b[2];
             var node = document.createElement('div');
@@ -201,7 +196,12 @@ define("util", ["require", "exports"], function (require, exports) {
     exports.distSquare = function (from, to) { return exports.normSquare(exports.diff(from, to)); };
     exports.dist = function (from, to) { return exports.normEuclidian(exports.diff(from, to)); };
     exports.gaussian = function (r, sigma) { return (Math.exp(-(r * r) / sigma)) / (Math.PI * sigma); };
-    exports.array1d = function (size, filler) { return __spread(Array(size).keys()).map(filler); };
+    exports.array1d = function (size, filler) {
+        var result = Array(size);
+        for (var x = 0; x < size; x++)
+            result[x] = filler(x);
+        return result;
+    };
     exports.array2d = function (width, height, filler) {
         var result = Array(height);
         var _loop_1 = function (y) {
@@ -221,7 +221,6 @@ define("util", ["require", "exports"], function (require, exports) {
     };
     /*
     color conversions are from https://github.com/antimatter15/rgb-lab/blob/master/color.js
-    slightly modified to map lab components in range of [0, 255]
     Lab ranges:
     {
       l: [ 0, 100 ],
@@ -268,6 +267,7 @@ define("util", ["require", "exports"], function (require, exports) {
 define("gerstner", ["require", "exports", "util"], function (require, exports, util_1) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
+    // some kind of port https://github.com/fHachenberg/pix
     var GerstnerPixelArt = /** @class */ (function () {
         function GerstnerPixelArt() {
             var _this = this;
@@ -316,6 +316,7 @@ define("gerstner", ["require", "exports", "util"], function (require, exports, u
                                 return [i, j];
                             });
                             result.superpixel_color = util_1.array2d(result.outWidth, result.outHeight, function () { return [0, 0, 0]; });
+                            result.superpixel_opaque = util_1.array2d(result.outWidth, result.outHeight, function () { return true; });
                             return [4 /*yield*/, result.updateSuperpixelMeans()];
                         case 1:
                             _b.sent();
@@ -328,14 +329,14 @@ define("gerstner", ["require", "exports", "util"], function (require, exports, u
                             fc = first_color.map(function (x) { return x * result.prob_o_; });
                             result.prob_c = [0.5, 0.5];
                             result.prob_co_ = [
-                                [result.outWidth * result.outHeight, 0.5],
-                                [result.outWidth * result.outHeight, 0.5],
+                                util_1.array1d(result.outWidth * result.outHeight, function () { return 0.5; }),
+                                util_1.array1d(result.outWidth * result.outHeight, function () { return 0.5; }),
                             ];
                             result.palette = [fc];
                             return [4 /*yield*/, result.getMaxEigen(0)];
                         case 2:
                             _a = __read.apply(void 0, [_b.sent(), 2]), val = _a[0], t = _a[1];
-                            util_1.add(val, first_color);
+                            util_1.add(val, fc);
                             result.palette.push(val);
                             result.sub_superpixel_pairs = [[0, 1]];
                             result.temperature_ = t;
@@ -345,9 +346,9 @@ define("gerstner", ["require", "exports", "util"], function (require, exports, u
             });
         };
         GerstnerPixelArt.prototype.getAveragedPalette = function () {
+            var averagedPalette = JSON.parse(JSON.stringify(this.palette));
             if (this.palette_maxed_flag_)
-                return this.palette;
-            var averagedPalette = this.palette; // TODO
+                return averagedPalette;
             var _loop_2 = function (i) {
                 var _a = __read(this_1.sub_superpixel_pairs[i], 2), index1 = _a[0], index2 = _a[1];
                 var color1 = this_1.palette[index1];
@@ -412,7 +413,7 @@ define("gerstner", ["require", "exports", "util"], function (require, exports, u
                         case 5:
                             if (!(y < this.height)) return [3 /*break*/, 8];
                             for (x = 0; x < this.width; ++x) {
-                                if (this.region_map[y][x][0] === -1) { // TODO
+                                if (this.region_map[y][x][0] === -1) {
                                     i = Math.floor(x / this.width * this.outWidth);
                                     j = Math.floor(y / this.height * this.outHeight);
                                     this.region_map[y][x] = [i, j];
@@ -439,6 +440,7 @@ define("gerstner", ["require", "exports", "util"], function (require, exports, u
                             colorSums = util_1.array2d(this.outWidth, this.outHeight, function () { return [0, 0, 0]; });
                             posSums = util_1.array2d(this.outWidth, this.outHeight, function () { return [0, 0]; });
                             weights = util_1.array2d(this.outWidth, this.outHeight, function () { return 0; });
+                            this.superpixel_opaque = util_1.array2d(this.outWidth, this.outHeight, function () { return true; });
                             this.superpixel_weights_ = util_1.array2d(this.outWidth, this.outHeight, function () { return 0; });
                             y = 0;
                             _b.label = 1;
@@ -446,6 +448,8 @@ define("gerstner", ["require", "exports", "util"], function (require, exports, u
                             if (!(y < this.height)) return [3 /*break*/, 4];
                             for (x = 0; x < this.width; ++x) {
                                 _a = __read(this.region_map[y][x], 2), sx = _a[0], sy = _a[1];
+                                if (this.input_weights_[y][x] !== 1)
+                                    this.superpixel_opaque[sy][sx] = false;
                                 util_1.add(colorSums[sy][sx], this.input[y][x]);
                                 util_1.add(posSums[sy][sx], [x, y]);
                                 weights[sy][sx]++;
@@ -741,46 +745,29 @@ define("gerstner", ["require", "exports", "util"], function (require, exports, u
         };
         GerstnerPixelArt.prototype.getMaxEigen = function (palette_index) {
             return __awaiter(this, void 0, void 0, function () {
-                var matrix, _loop_10, this_6, y, _a, vec, lambda, len;
-                var _this = this;
+                var matrix, y, x, prob_oc, color_error, _a, vec, lambda, len;
                 return __generator(this, function (_b) {
                     switch (_b.label) {
                         case 0:
                             matrix = util_1.array1d(9, function () { return 0; });
-                            _loop_10 = function (y) {
-                                var _loop_11, x;
-                                return __generator(this, function (_a) {
-                                    switch (_a.label) {
-                                        case 0:
-                                            _loop_11 = function (x) {
-                                                var prob_oc = this_6.prob_co_[palette_index][this_6.vec2idx([x, y])] * this_6.prob_o_ / this_6.prob_c[palette_index];
-                                                var color_error = this_6.palette[palette_index].map(function (v, i) { return Math.abs(v - _this.superpixel_color[y][x][i]); });
-                                                matrix[0] += prob_oc * color_error[0] * color_error[0];
-                                                matrix[1] += prob_oc * color_error[1] * color_error[0];
-                                                matrix[2] += prob_oc * color_error[2] * color_error[0];
-                                                matrix[3] += prob_oc * color_error[0] * color_error[1];
-                                                matrix[4] += prob_oc * color_error[1] * color_error[1];
-                                                matrix[5] += prob_oc * color_error[2] * color_error[1];
-                                                matrix[6] += prob_oc * color_error[0] * color_error[2];
-                                                matrix[7] += prob_oc * color_error[1] * color_error[2];
-                                                matrix[8] += prob_oc * color_error[2] * color_error[2];
-                                            };
-                                            for (x = 0; x < this_6.outWidth; ++x) {
-                                                _loop_11(x);
-                                            }
-                                            return [4 /*yield*/, this_6.releaser.release()];
-                                        case 1:
-                                            _a.sent();
-                                            return [2 /*return*/];
-                                    }
-                                });
-                            };
-                            this_6 = this;
                             y = 0;
                             _b.label = 1;
                         case 1:
                             if (!(y < this.outHeight)) return [3 /*break*/, 4];
-                            return [5 /*yield**/, _loop_10(y)];
+                            for (x = 0; x < this.outWidth; ++x) {
+                                prob_oc = this.prob_co_[palette_index][this.vec2idx([x, y])] * this.prob_o_ / this.prob_c[palette_index];
+                                color_error = util_1.diff(this.palette[palette_index], this.superpixel_color[y][x]).map(function (x) { return Math.abs(x); });
+                                matrix[0] += prob_oc * color_error[0] * color_error[0];
+                                matrix[1] += prob_oc * color_error[1] * color_error[0];
+                                matrix[2] += prob_oc * color_error[2] * color_error[0];
+                                matrix[3] += prob_oc * color_error[0] * color_error[1];
+                                matrix[4] += prob_oc * color_error[1] * color_error[1];
+                                matrix[5] += prob_oc * color_error[2] * color_error[1];
+                                matrix[6] += prob_oc * color_error[0] * color_error[2];
+                                matrix[7] += prob_oc * color_error[1] * color_error[2];
+                                matrix[8] += prob_oc * color_error[2] * color_error[2];
+                            }
+                            return [4 /*yield*/, this.releaser.release()];
                         case 2:
                             _b.sent();
                             _b.label = 3;
@@ -790,7 +777,7 @@ define("gerstner", ["require", "exports", "util"], function (require, exports, u
                         case 4:
                             _a = this.getMaxEigenFunc(matrix), vec = _a.vec, lambda = _a.lambda;
                             len = util_1.normEuclidian(vec);
-                            return [2 /*return*/, [len > 0 ? vec.map(function (x) { return x / len * 0.8; }) : vec, 1.1 * Math.sqrt(2 * lambda)]];
+                            return [2 /*return*/, [vec.map(function (x) { return 0.8 * x / (len || 1); }), 1.1 * Math.sqrt(2 * Math.abs(lambda))]];
                     }
                 });
             });
@@ -820,7 +807,7 @@ define("gerstner", ["require", "exports", "util"], function (require, exports, u
                             this.prob_c.push(this.prob_c[index1]);
                             this.prob_co_.push(this.prob_co_[index1]);
                             this.palette.push(subcluster_color_2);
-                            this.sub_superpixel_pairs[index].push([index2, nextIndex2]);
+                            this.sub_superpixel_pairs.push([index2, nextIndex2]);
                             this.prob_c[index2] *= 0.5;
                             this.prob_c.push(this.prob_c[index2]);
                             this.prob_co_.push(this.prob_co_[index2]);
@@ -834,38 +821,36 @@ define("gerstner", ["require", "exports", "util"], function (require, exports, u
             var new_palette = [];
             var new_prob_c = [];
             var nPaletteAssign = util_1.array2d(this.outWidth, this.outHeight, function () { return 0; });
-            var _loop_12 = function (j) {
-                var _a = __read(this_7.sub_superpixel_pairs[j], 2), index1 = _a[0], index2 = _a[1];
-                var weight1 = this_7.prob_c[index1];
-                var weight2 = this_7.prob_c[index2];
+            var _loop_10 = function (j) {
+                var _a = __read(this_6.sub_superpixel_pairs[j], 2), index1 = _a[0], index2 = _a[1];
+                var weight1 = this_6.prob_c[index1];
+                var weight2 = this_6.prob_c[index2];
                 var total_weight = weight1 + weight2;
                 weight1 /= total_weight;
                 weight2 /= total_weight;
-                var color = this_7.palette[index1].map(function (x) { return x * weight1; });
-                util_1.add(color, this_7.palette[index2].map(function (x) { return x * weight2; }));
+                var color = this_6.palette[index1].map(function (x) { return x * weight1; });
+                util_1.add(color, this_6.palette[index2].map(function (x) { return x * weight2; }));
                 new_palette.push(color);
-                new_prob_c.push(this_7.prob_c[index1] + this_7.prob_c[index2]);
-                // new_prob_co.push(this.prob_co_[index1])
-                for (var y = 0; y < this_7.outHeight; ++y) {
-                    for (var x = 0; x < this_7.outWidth; ++x) {
-                        if ([index1, index2].includes(this_7.palette_assign[y][x])) {
+                new_prob_c.push(this_6.prob_c[index1] + this_6.prob_c[index2]);
+                for (var y = 0; y < this_6.outHeight; ++y) {
+                    for (var x = 0; x < this_6.outWidth; ++x) {
+                        if ([index1, index2].includes(this_6.palette_assign[y][x])) {
                             nPaletteAssign[y][x] = j;
                         }
                     }
                 }
             };
-            var this_7 = this;
+            var this_6 = this;
             for (var j = 0; j < this.sub_superpixel_pairs.length; ++j) {
-                _loop_12(j);
+                _loop_10(j);
             }
             this.palette = new_palette;
             this.palette_assign = nPaletteAssign;
             this.prob_c = new_prob_c;
-            // this.prob_oc_ = new_prob_co
         };
         GerstnerPixelArt.prototype.expandPalette = function () {
             return __awaiter(this, void 0, void 0, function () {
-                var splits, index, boths, _a, index1, index2, color1, color2, error, _b, newColor, i;
+                var splits, index, _a, index1, index2, color1, color2, error, _b, newColor, i;
                 return __generator(this, function (_c) {
                     switch (_c.label) {
                         case 0:
@@ -875,10 +860,8 @@ define("gerstner", ["require", "exports", "util"], function (require, exports, u
                             index = 0;
                             _c.label = 1;
                         case 1:
-                            if (!(index < this.palette.length)) return [3 /*break*/, 5];
-                            boths = this.sub_superpixel_pairs[index];
-                            console.warn(boths);
-                            _a = __read([0, 1], 2), index1 = _a[0], index2 = _a[1];
+                            if (!(index < this.sub_superpixel_pairs.length)) return [3 /*break*/, 5];
+                            _a = __read(this.sub_superpixel_pairs[index], 2), index1 = _a[0], index2 = _a[1];
                             color1 = this.palette[index1];
                             color2 = this.palette[index2];
                             error = util_1.dist(color1, color2);
@@ -895,14 +878,22 @@ define("gerstner", ["require", "exports", "util"], function (require, exports, u
                             return [3 /*break*/, 1];
                         case 5:
                             splits.sort(function (a, b) { return b[0] - a[0]; });
-                            for (i = 0; i < splits.length; i++) {
-                                this.splitColor(splits[i][1]);
-                                if (this.palette.length >= 2 * this.max_palette_size_) {
-                                    this.condensePalette();
-                                    return [2 /*return*/];
-                                }
+                            i = 0;
+                            _c.label = 6;
+                        case 6:
+                            if (!(i < splits.length)) return [3 /*break*/, 9];
+                            return [4 /*yield*/, this.splitColor(splits[i][1])];
+                        case 7:
+                            _c.sent();
+                            if (this.palette.length >= 2 * this.max_palette_size_) {
+                                this.condensePalette();
+                                return [2 /*return*/];
                             }
-                            return [2 /*return*/];
+                            _c.label = 8;
+                        case 8:
+                            i++;
+                            return [3 /*break*/, 6];
+                        case 9: return [2 /*return*/];
                     }
                 });
             });
@@ -928,7 +919,6 @@ define("gerstner", ["require", "exports", "util"], function (require, exports, u
                         case 4:
                             paletteError = _a.sent();
                             if (!(paletteError < 1)) return [3 /*break*/, 6];
-                            this.temperature_ = Math.max(1, this.temperature_ * 0.7);
                             if (this.temperature_ <= 1)
                                 this.converged_flag_ = true;
                             else
@@ -947,16 +937,18 @@ define("gerstner", ["require", "exports", "util"], function (require, exports, u
         };
         GerstnerPixelArt.prototype.draw = function (canvas) {
             return __awaiter(this, void 0, void 0, function () {
-                var averagedPalette, pixelSize, palette, y, x, color, _a, r, g, b;
+                var averagedPalette, pixelSize, palette, y, x, paletteIndex, _a, r, g, b, alpha;
                 return __generator(this, function (_b) {
-                    averagedPalette = this.getAveragedPalette();
+                    averagedPalette = this.getAveragedPalette().map(util_1.lab2rgb);
                     pixelSize = this.pixelSize;
                     palette = averagedPalette.map(function (color) { return ({ color: color, timesUsed: 0 }); });
                     for (y = 0; y < this.outHeight; ++y) {
                         for (x = 0; x < this.outWidth; ++x) {
-                            color = averagedPalette[this.palette_assign[y][x]];
-                            _a = __read(color ? util_1.lab2rgb(color) : [0, 0, 0], 3), r = _a[0], g = _a[1], b = _a[2];
-                            canvas.fillRect(x * pixelSize, y * pixelSize, pixelSize, pixelSize, [r, g, b, 255]);
+                            paletteIndex = this.palette_assign[y][x];
+                            _a = __read(averagedPalette[paletteIndex], 3), r = _a[0], g = _a[1], b = _a[2];
+                            alpha = this.input_weights_[y * pixelSize][x * pixelSize] === 1 ? 255 : 0;
+                            palette[paletteIndex].timesUsed++;
+                            canvas.fillRect(x * pixelSize, y * pixelSize, pixelSize, pixelSize, [r, g, b, alpha]);
                         }
                     }
                     return [2 /*return*/, palette];
@@ -990,7 +982,7 @@ define("naive", ["require", "exports", "util"], function (require, exports, util
         };
         NaivePixelArt.prototype.iterate = function () {
             return __awaiter(this, void 0, void 0, function () {
-                var distortion, _a, pixels, releaser, palette, clusterMap, centroids, j, row, _loop_13, i, j, row, i, centroid;
+                var distortion, _a, pixels, releaser, palette, clusterMap, centroids, j, row, _loop_11, i, j, row, i, centroid;
                 return __generator(this, function (_b) {
                     switch (_b.label) {
                         case 0:
@@ -1002,14 +994,14 @@ define("naive", ["require", "exports", "util"], function (require, exports, util
                         case 1:
                             if (!(j < pixels.length)) return [3 /*break*/, 4];
                             row = pixels[j];
-                            _loop_13 = function (i) {
+                            _loop_11 = function (i) {
                                 var _a = __read(row[i], 3), r = _a[0], g = _a[1], b = _a[2];
                                 var _b = util_2.minWithIndex(centroids.map(function (c) { return util_2.distSquare(c, [r, g, b]); })), index = _b.index, val = _b.val;
                                 clusterMap[j][i] = index;
                                 distortion += val;
                             };
                             for (i = 0; i < row.length; i++) {
-                                _loop_13(i);
+                                _loop_11(i);
                             }
                             return [4 /*yield*/, releaser.release()];
                         case 2:
@@ -1071,9 +1063,9 @@ define("naive", ["require", "exports", "util"], function (require, exports, util
                             if (!(j < pixels.length)) return [3 /*break*/, 4];
                             row = pixels[j];
                             for (i = 0; i < row.length; i += pixelSize) {
-                                alpha = row[i][3];
+                                alpha = row[i][3] === 255;
                                 _b = __read(palette[clusterMap[j][i]].color, 3), r = _b[0], g = _b[1], b = _b[2];
-                                canvas.fillRect(i, j, pixelSize, pixelSize, [r, g, b, alpha]);
+                                canvas.fillRect(i, j, pixelSize, pixelSize, [r, g, b, alpha ? 255 : 0]);
                             }
                             return [4 /*yield*/, releaser.release()];
                         case 2:

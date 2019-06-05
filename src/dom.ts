@@ -32,7 +32,6 @@ export const fillPalette = (domPalette: HTMLElement, palette: Palette) => {
   clearChildren(domPalette)
   const paletteCopy = palette.map(x => x)
   const allUsage = paletteCopy.reduce((acc, x) => acc + x.timesUsed, 0)
-  paletteCopy.sort((a, b) => b.timesUsed - a.timesUsed)
   paletteCopy.forEach(({ timesUsed: u, color: [r, g, b] }) => {
     const node = document.createElement('div')
     node.title = u ? `Usage ${Math.floor(u / allUsage * 10000) / 100}%` : "This color wasn't used"

@@ -77,9 +77,9 @@ export default class NaivePixelArt implements PixelArtAlgorithm {
     for (let j = 0; j < pixels.length; j += pixelSize) {
       const row = pixels[j]
       for (let i = 0; i < row.length; i += pixelSize) {
-        const alpha = row[i][3]
+        const alpha = row[i][3] === 255
         const [r, g, b] = palette[clusterMap[j][i]].color
-        canvas.fillRect(i, j, pixelSize, pixelSize, [r, g, b, alpha])
+        canvas.fillRect(i, j, pixelSize, pixelSize, [r, g, b, alpha ? 255 : 0])
       }
       await releaser.release()
     }

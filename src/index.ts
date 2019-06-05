@@ -4,7 +4,6 @@ import WrappedHtmlCanvas from './canvas'
 import { AnimationFrameReleaser } from './releaser'
 import PixelArtAlgorithm from './gerstner'
 import getMaxEigenWrapper from './jsfeat'
-import { array2d, rgb2lab } from './util';
 
 
 const releaser = new AnimationFrameReleaser()

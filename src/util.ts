@@ -23,7 +23,11 @@ export const dist = (from: any[], to: any[]) => normEuclidian(diff(from, to))
 
 export const gaussian = (r: number, sigma: number) => (Math.exp(-(r * r) / sigma)) / (Math.PI * sigma)
 
-export const array1d = <T>(size: number, filler: (i?: number) => T): T[] => [...Array(size).keys()].map(filler)
+export const array1d = <T>(size: number, filler: (i?: number) => T): T[] => {
+  const result = Array(size)
+  for (let x = 0; x < size; x++) result[x] = filler(x)
+  return result
+}
 
 export const array2d = <T>(width: number, height: number, filler: (i?: number, j?: number) => T): T[][] => {
   const result = Array(height)
@@ -38,7 +42,6 @@ export const minWithIndex = (v: number[]) => {
 
 /*
 color conversions are from https://github.com/antimatter15/rgb-lab/blob/master/color.js
-slightly modified to map lab components in range of [0, 255]
 Lab ranges:
 {
   l: [ 0, 100 ],
