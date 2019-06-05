@@ -5,6 +5,8 @@ export type Palette = { timesUsed: number, color: RgbColor }[]
 export type LabColor = [number, number, number]
 export type Point = [number, number]
 
+export type GetMaxEigen = (vec9: number[]) => { lambda: number, vec: [number, number, number] }
+
 export interface Canvas {
   fillRect(x: number, y: number, w: number, h: number, color: RgbaColor)
   getPixel(x: number, y: number): RgbaColor

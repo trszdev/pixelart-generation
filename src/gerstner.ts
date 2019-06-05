@@ -1,50 +1,94 @@
-import { LabColor, PixelArtAlgorithm, Palette, Canvas, Point, EventLoopReleaser } from './types'
-import { array2d, dist, array1d, add, normEuclidian, gaussian, minWithIndex } from './util';
-
-
-export class BilateralFilter {
-  readonly kernelSize: number = 3
-  readonly colorStd: number = 4
-  readonly positionStd: number = 0.87
-}
-
-export class LaplaceSmoothFilter {
-  readonly factor = 0.4
-}
+import { LabColor, PixelArtAlgorithm, Palette, Canvas, Point, EventLoopReleaser, GetMaxEigen, RgbaColor } from './types'
+import { array2d, dist, array1d, add, normEuclidian, gaussian, minWithIndex, lab2rgb, rgb2lab } from './util'
 
 
 export default class GerstnerPixelArt implements PixelArtAlgorithm {
-  readonly bilateralFilter: BilateralFilter
-  readonly laplaceFilter: LaplaceSmoothFilter
+  getMaxEigenFunc: GetMaxEigen
 
-  readonly slicTolerance: number
-  readonly pixelSize: number
-  readonly releaser: EventLoopReleaser
-  readonly width: number
-  readonly height: number
-  readonly outWidth: number
-  readonly outHeight: number
-  readonly input: LabColor[][]
+  slicTolerance = 45
+  sigma_color_ = 4
+  sigma_position_ = 0.87
+  smooth_pos_factor_ = 0.4
+  pixelSize: number
+  releaser: EventLoopReleaser
+  width: number
+  height: number
+  outWidth: number
+  outHeight: number
+  input: LabColor[][]
 
   region_map
-  range_ // sqrt(N/M)
+  range_: number // sqrt(N/M)
   superpixel_pos
   palette_assign
   region_list_
   palette: LabColor[]
-  palette_maxed_flag_
-  sub_superpixel_pairs
+  palette_maxed_flag_: boolean
+  sub_superpixel_pairs: any[]
   prob_c
   superpixel_weights_
-  input_weights_
+  input_weights_: number[][]
   superpixel_color: LabColor[][]
-  smooth_pos_factor_
-  sigma_color_
-  sigma_position_
+
   prob_co_
   temperature_: number
-  converged_flag_
+  converged_flag_: boolean
   max_palette_size_: number
+  prob_o_: number
+
+  static async fromImage(input: RgbaColor[][], pixelSize: number, paletteSize: number,
+    releaser: EventLoopReleaser, getMaxEigenFunc: GetMaxEigen) {
+    const result = new GerstnerPixelArt()
+    const weights = array2d(input[0].length, input.length, () => 1)
+    const labPixels = array2d(input[0].length, input.length, (i, j) => {
+      const [r, g, b, a] = input[j][i]
+      weights[j][i] = a / 255
+      return rgb2lab([r, g, b])
+    })
+    result.height = input.length
+    result.width = input[0].length
+    result.releaser = releaser
+    result.max_palette_size_ = paletteSize
+    result.getMaxEigenFunc = getMaxEigenFunc
+    result.pixelSize = pixelSize
+    result.outHeight = Math.floor(result.height / pixelSize)
+    result.outWidth = Math.floor(result.width / pixelSize)
+    result.range_ = Math.sqrt((result.height / result.outHeight) * (result.width / result.outWidth))
+    result.palette_assign = array2d(result.outWidth, result.outHeight, () => 0)
+    result.superpixel_pos = array2d(result.outWidth, result.outHeight, (x, y) => {
+      const i = ((x + .5) / result.outWidth * result.width)
+      const j = ((y + .5) / result.outHeight * result.height)
+      return [i, j]
+    })
+    result.input = labPixels
+    result.input_weights_ = weights
+    result.region_map = array2d(result.width, result.height, (x, y) => {
+      const i = Math.floor(x / result.width * result.outWidth)
+      const j = Math.floor(y / result.height * result.outHeight)
+      return [i, j]
+    })
+    result.superpixel_color = array2d(result.outWidth, result.outHeight, () => [0, 0, 0])
+    await result.updateSuperpixelMeans()
+    let first_color = [0, 0, 0]
+    for (let y = 0; y < result.outHeight; ++y) {
+      for (let x = 0; x < result.outWidth; ++x) 
+        add(first_color, result.superpixel_color[y][x])
+    }
+    result.prob_o_ = 1.0 / (result.outWidth * result.outHeight)
+    const fc = first_color.map(x => x * result.prob_o_) as LabColor
+    result.prob_c = [0.5, 0.5]
+    result.prob_co_ = [
+      [result.outWidth * result.outHeight, 0.5],
+      [result.outWidth * result.outHeight, 0.5],
+    ]
+    result.palette = [fc]
+    const [val, t] = await result.getMaxEigen(0)
+    add(val, first_color)
+    result.palette.push(val)
+    result.sub_superpixel_pairs = [[0, 1]]
+    result.temperature_ = t
+    return result
+  }
 
   getAveragedPalette() {
     if (this.palette_maxed_flag_) return this.palette
@@ -269,64 +313,99 @@ export default class GerstnerPixelArt implements PixelArtAlgorithm {
     return palette_error
   }
 
-  async getMaxEigen(palette_index: number) {
-
+  async getMaxEigen(palette_index: number): Promise<[LabColor, number]> {
+    const matrix = array1d(9, () => 0)
+    for (let y = 0; y < this.outHeight; ++y) {
+      for (let x = 0; x < this.outWidth; ++x) {
+        const prob_oc = this.prob_co_[palette_index][this.vec2idx([x, y])] * this.prob_o_ / this.prob_c[palette_index]
+        const color_error = this.palette[palette_index].map((v, i) => Math.abs(v - this.superpixel_color[y][x][i]))
+        matrix[0] += prob_oc * color_error[0] * color_error[0]
+        matrix[1] += prob_oc * color_error[1] * color_error[0]
+        matrix[2] += prob_oc * color_error[2] * color_error[0]
+        matrix[3] += prob_oc * color_error[0] * color_error[1]
+        matrix[4] += prob_oc * color_error[1] * color_error[1]
+        matrix[5] += prob_oc * color_error[2] * color_error[1]
+        matrix[6] += prob_oc * color_error[0] * color_error[2]
+        matrix[7] += prob_oc * color_error[1] * color_error[2]
+        matrix[8] += prob_oc * color_error[2] * color_error[2]
+      }
+      await this.releaser.release()
+    }
+    const { vec, lambda } = this.getMaxEigenFunc(matrix)
+    const len = normEuclidian(vec)
+    return [len > 0 ? vec.map(x => x / len * 0.8) as LabColor : vec, 1.1 * Math.sqrt(2 * lambda)]
   }
 
-  splitColor(index: number) {
-    //remove subsuperpixels if max palette size is reached
-    //and represent each color as a single superpixel
+  async splitColor(index: number) {
     const [index1, index2] = this.sub_superpixel_pairs[index]
     const nextIndex1 = this.palette.length
     const nextIndex2 = nextIndex1 + 1
     const color1 = this.palette[index1]
     const color2 = this.palette[index2]
-    const sub_color1 = 1
+    const [subcluster_color_1] = await this.getMaxEigen(index1)
+    const [subcluster_color_2] = await this.getMaxEigen(index2)
+    add(subcluster_color_1, color1)
+    add(subcluster_color_2, color2)
 
-    //create a subsuperpixel for each of the two new
-    //colors, set to slight permutations of the
-    //old subsuperpixels' colors
-    /*
-    cv::Vec3f subcluster_color_1 = 
-      color_1 + GetMaxEigen(index_1).first*kSubclusterPertubation;
-    cv::Vec3f subcluster_color_2 = 
-      color_2 + GetMaxEigen(index_2).first*kSubclusterPertubation;
+    this.palette.push(subcluster_color_1)
+    this.sub_superpixel_pairs[index][1] = nextIndex1
+    this.prob_c[index1] *= 0.5
+    this.prob_c.push(this.prob_c[index1])
+    this.prob_co_.push(this.prob_co_[index1])
 
-    //reconstruct first pair
-    GetCurrentState()->palette.push_back(subcluster_color_1);
-    GetCurrentState()->sub_superpixel_pairs[pair_index].second = next_index1;
-    GetCurrentState()->prob_c[index_1]*=.5f; 
-    GetCurrentState()->prob_c.push_back(GetCurrentState()->prob_c[index_1]);
-    prob_co_.push_back(prob_co_[index_1]);
-
-    //reconstruct second pair
-    GetCurrentState()->palette.push_back(subcluster_color_2);
-    std::pair<int,int> new_pair(index_2, next_index2);
-    GetCurrentState()->sub_superpixel_pairs.push_back(new_pair);
-    GetCurrentState()->prob_c[index_2]*=.5f;
-    GetCurrentState()->prob_c.push_back(GetCurrentState()->prob_c[index_2]);
-    prob_co_.push_back(prob_co_[index_2]);
-    */
+    this.palette.push(subcluster_color_2)
+    this.sub_superpixel_pairs[index].push([index2, nextIndex2])
+    this.prob_c[index2] *= 0.5
+    this.prob_c.push(this.prob_c[index2])
+    this.prob_co_.push(this.prob_co_[index2])
   }
 
   condensePalette() {
-
+    this.palette_maxed_flag_ = true
+    const new_palette = []
+    const new_prob_c = []
+    const nPaletteAssign = array2d(this.outWidth, this.outHeight, () => 0)
+    for (let j = 0; j < this.sub_superpixel_pairs.length; ++j) {
+      const [index1, index2] = this.sub_superpixel_pairs[j]
+      let weight1 = this.prob_c[index1]
+      let weight2 = this.prob_c[index2]
+      const total_weight = weight1 + weight2
+      weight1 /= total_weight
+      weight2 /= total_weight
+      const color = this.palette[index1].map(x => x * weight1)
+      add(color, this.palette[index2].map(x => x * weight2))
+      new_palette.push(color)
+      new_prob_c.push(this.prob_c[index1] + this.prob_c[index2])
+      // new_prob_co.push(this.prob_co_[index1])
+      for (let y = 0; y < this.outHeight; ++y) {
+        for (let x = 0; x < this.outWidth; ++x) {
+          if ([index1, index2].includes(this.palette_assign[y][x])) {
+            nPaletteAssign[y][x] = j
+          }
+        }
+      }
+    }
+    this.palette = new_palette
+    this.palette_assign = nPaletteAssign
+    this.prob_c = new_prob_c
+    // this.prob_oc_ = new_prob_co
   }
 
   async expandPalette() {
     if (this.palette_maxed_flag_) return
     const splits = []
     for (let index = 0; index < this.palette.length; ++index) {
-      const [index1, index2] = this.sub_superpixel_pairs[index]
+      const boths = this.sub_superpixel_pairs[index]
+      console.warn(boths)
+      const [index1, index2] = [0, 1]
       const color1 = this.palette[index1]
       const color2 = this.palette[index2]
       const error = dist(color1, color2)
       if (error > 1.6) {
         splits.push([error, index])
       } else {
-        // GetCurrentState()->palette[index_2] += 
-        //  GetMaxEigen(index_1).first*kSubclusterPertubation;
-        add(this.palette[index2], [].map(x => x * 0.8))
+        const [newColor] = await this.getMaxEigen(index1)
+        add(this.palette[index2], newColor)
       }
     }
     splits.sort((a, b) => b[0] - a[0])
@@ -360,6 +439,17 @@ export default class GerstnerPixelArt implements PixelArtAlgorithm {
   }
 
   async draw(canvas: Canvas): Promise<Palette> {
-    return []
+    const averagedPalette = this.getAveragedPalette()
+    const { pixelSize } = this
+    const palette = averagedPalette.map(color => ({ color, timesUsed: 0 }))
+    for (let y = 0; y < this.outHeight; ++y) {
+      for (let x = 0; x < this.outWidth; ++x) {
+        const color = averagedPalette[this.palette_assign[y][x]]
+        // palette[this.palette_assign[y][x]].timesUsed++
+        const [r, g, b] = color ? lab2rgb(color) : [0, 0, 0]
+        canvas.fillRect(x * pixelSize, y * pixelSize, pixelSize, pixelSize, [r, g, b, 255])
+      }
+    }
+    return palette
   }
 }

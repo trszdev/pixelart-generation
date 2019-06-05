@@ -2,7 +2,9 @@ import { dom, fillPalette, setProgress, ButtonProcess } from './dom'
 import NaivePixelArt from './naive'
 import WrappedHtmlCanvas from './canvas'
 import { AnimationFrameReleaser } from './releaser'
-
+import PixelArtAlgorithm from './gerstner'
+import getMaxEigenWrapper from './jsfeat'
+import { array2d, rgb2lab } from './util';
 
 
 const releaser = new AnimationFrameReleaser()
@@ -67,11 +69,12 @@ dom.gerstnerSubmit.onclick = async () => {
   dom.canvasGerstner.height = dom.canvasOrig.height
   const canvas = new WrappedHtmlCanvas(dom.canvasGerstner)
   const pixels = (new WrappedHtmlCanvas(dom.canvasOrig)).getPixels()
-  const ns = NaivePixelArt.fromRandomPalette(dom.gerstnerColors.valueAsNumber, dom.gerstnerFactor.valueAsNumber, releaser, pixels)
-  for (let i = 1; !ns.hasCompleted(); i++) {
-    await ns.iterate()
+  const gerstner = await PixelArtAlgorithm.fromImage(pixels, dom.gerstnerFactor.valueAsNumber,
+    dom.gerstnerColors.valueAsNumber, releaser, getMaxEigenWrapper)
+  for (let i = 1; !gerstner.hasCompleted(); i++) {
+    await gerstner.iterate()
     if (gerstnerProcess.tryFreeButton()) return
-    const palette = await ns.draw(canvas)
+    const palette = await gerstner.draw(canvas)
     setProgress(dom.progressGerstner, i)
     fillPalette(dom.paletteGerstner, palette)
     if (gerstnerProcess.tryFreeButton()) return
