@@ -8,7 +8,11 @@ export const dom = {
   progressNn: document.getElementById('progress-nn'),
   progressGerstner: document.getElementById('progress-gerstner'),
   paletteNn: document.getElementById('palette-nn'),
-  paletteGerstner: document.getElementById('palette-gerstner'),
+  paletteGerstner: document.getElementById('palette-gerstner') as HTMLInputElement,
+  gifGerstner: document.getElementById('gerstner-gif') as HTMLInputElement,
+  gifNn: document.getElementById('nn-gif') as HTMLInputElement,
+  pngGerstner: document.getElementById('gerstner-png') as HTMLInputElement,
+  pngNn: document.getElementById('nn-png') as HTMLInputElement,
   nnFactor: document.getElementById('nn-factor') as HTMLInputElement,
   nnColors: document.getElementById('nn-colors') as HTMLInputElement,
   nnSubmit: document.getElementById('nn-submit') as HTMLInputElement,
@@ -16,12 +20,19 @@ export const dom = {
   gerstnerColors: document.getElementById('gerstner-colors') as HTMLInputElement,
   gerstnerSubmit: document.getElementById('gerstner-submit') as HTMLInputElement,
   uploadInput: document.getElementById('upload') as HTMLInputElement,
-  submitTests: [1, 2, 3, 4, 5, 6].map(i => document.getElementById(`submit-test${i}`)),
+  submitTests: [...Array(12).keys()].map(i => document.getElementById(`submit-test${i + 1}`)),
+}
+
+export const saveAs = (url: string, name: string) => {
+  const link = document.createElement('a')
+  link.download = name
+  link.href = url
+  link.click()
 }
 
 export const setProgress = (node: HTMLElement, val: number) => {
   clearChildren(node)
-  node.appendChild(document.createTextNode(`(Iteration: ${val})`))
+  if (val) node.appendChild(document.createTextNode(`(Iteration: ${val})`))
 }
 
 export const clearChildren = (node: HTMLElement) => {

@@ -20,6 +20,7 @@ export interface PixelArtAlgorithm {
   iterate(): Promise<void>
   hasCompleted(): boolean
   draw(canvas: Canvas): Promise<Palette>
+  drawRealSized(canvas: Canvas): Promise<void>
 }
 
 export interface EventLoopReleaser {

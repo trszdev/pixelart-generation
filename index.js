@@ -14,6 +14,10 @@ var __read = (this && this.__read) || function (o, n) {
     }
     return ar;
 };
+var __spread = (this && this.__spread) || function () {
+    for (var ar = [], i = 0; i < arguments.length; i++) ar = ar.concat(__read(arguments[i]));
+    return ar;
+};
 var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
     return new (P || (P = Promise))(function (resolve, reject) {
         function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
@@ -116,6 +120,10 @@ define("dom", ["require", "exports"], function (require, exports) {
         progressGerstner: document.getElementById('progress-gerstner'),
         paletteNn: document.getElementById('palette-nn'),
         paletteGerstner: document.getElementById('palette-gerstner'),
+        gifGerstner: document.getElementById('gerstner-gif'),
+        gifNn: document.getElementById('nn-gif'),
+        pngGerstner: document.getElementById('gerstner-png'),
+        pngNn: document.getElementById('nn-png'),
         nnFactor: document.getElementById('nn-factor'),
         nnColors: document.getElementById('nn-colors'),
         nnSubmit: document.getElementById('nn-submit'),
@@ -123,11 +131,18 @@ define("dom", ["require", "exports"], function (require, exports) {
         gerstnerColors: document.getElementById('gerstner-colors'),
         gerstnerSubmit: document.getElementById('gerstner-submit'),
         uploadInput: document.getElementById('upload'),
-        submitTests: [1, 2, 3, 4, 5, 6].map(function (i) { return document.getElementById("submit-test" + i); }),
+        submitTests: __spread(Array(12).keys()).map(function (i) { return document.getElementById("submit-test" + (i + 1)); }),
+    };
+    exports.saveAs = function (url, name) {
+        var link = document.createElement('a');
+        link.download = name;
+        link.href = url;
+        link.click();
     };
     exports.setProgress = function (node, val) {
         exports.clearChildren(node);
-        node.appendChild(document.createTextNode("(Iteration: " + val + ")"));
+        if (val)
+            node.appendChild(document.createTextNode("(Iteration: " + val + ")"));
     };
     exports.clearChildren = function (node) {
         while (node.firstChild)
@@ -272,9 +287,9 @@ define("gerstner", ["require", "exports", "util"], function (require, exports, u
         function GerstnerPixelArt() {
             var _this = this;
             this.slicTolerance = 45;
-            this.sigma_color_ = 4;
-            this.sigma_position_ = 0.87;
-            this.smooth_pos_factor_ = 0.4;
+            this.smoothColorFactor = 4;
+            this.smoothPosFactor = 0.87;
+            this.laplaceFactor = 0.4;
             this.vec2idx = function (_a) {
                 var _b = __read(_a, 2), x = _b[0], y = _b[1];
                 return x + _this.outWidth * y;
@@ -282,7 +297,7 @@ define("gerstner", ["require", "exports", "util"], function (require, exports, u
         }
         GerstnerPixelArt.fromImage = function (input, pixelSize, paletteSize, releaser, getMaxEigenFunc) {
             return __awaiter(this, void 0, void 0, function () {
-                var result, weights, labPixels, first_color, y, x, fc, _a, val, t;
+                var result, weights, labPixels, firstColor, y, x, fc, _a, val, t;
                 return __generator(this, function (_b) {
                     switch (_b.label) {
                         case 0:
@@ -296,39 +311,38 @@ define("gerstner", ["require", "exports", "util"], function (require, exports, u
                             result.height = input.length;
                             result.width = input[0].length;
                             result.releaser = releaser;
-                            result.max_palette_size_ = paletteSize;
+                            result.paletteSize = paletteSize;
                             result.getMaxEigenFunc = getMaxEigenFunc;
                             result.pixelSize = pixelSize;
-                            result.outHeight = Math.floor(result.height / pixelSize);
-                            result.outWidth = Math.floor(result.width / pixelSize);
-                            result.range_ = Math.sqrt((result.height / result.outHeight) * (result.width / result.outWidth));
-                            result.palette_assign = util_1.array2d(result.outWidth, result.outHeight, function () { return 0; });
-                            result.superpixel_pos = util_1.array2d(result.outWidth, result.outHeight, function (x, y) {
+                            result.outHeight = Math.ceil(result.height / pixelSize);
+                            result.outWidth = Math.ceil(result.width / pixelSize);
+                            result.slicRange = Math.sqrt((result.height / result.outHeight) * (result.width / result.outWidth));
+                            result.paletteAt = util_1.array2d(result.outWidth, result.outHeight, function () { return 0; });
+                            result.centroids = util_1.array2d(result.outWidth, result.outHeight, function (x, y) {
                                 var i = ((x + .5) / result.outWidth * result.width);
                                 var j = ((y + .5) / result.outHeight * result.height);
                                 return [i, j];
                             });
                             result.input = labPixels;
-                            result.input_weights_ = weights;
-                            result.region_map = util_1.array2d(result.width, result.height, function (x, y) {
+                            result.inputWeights = weights;
+                            result.regionMap = util_1.array2d(result.width, result.height, function (x, y) {
                                 var i = Math.floor(x / result.width * result.outWidth);
                                 var j = Math.floor(y / result.height * result.outHeight);
                                 return [i, j];
                             });
-                            result.superpixel_color = util_1.array2d(result.outWidth, result.outHeight, function () { return [0, 0, 0]; });
-                            result.superpixel_opaque = util_1.array2d(result.outWidth, result.outHeight, function () { return true; });
+                            result.superpixelColor = util_1.array2d(result.outWidth, result.outHeight, function () { return [0, 0, 0]; });
                             return [4 /*yield*/, result.updateSuperpixelMeans()];
                         case 1:
                             _b.sent();
-                            first_color = [0, 0, 0];
+                            firstColor = [0, 0, 0];
                             for (y = 0; y < result.outHeight; ++y) {
                                 for (x = 0; x < result.outWidth; ++x)
-                                    util_1.add(first_color, result.superpixel_color[y][x]);
+                                    util_1.add(firstColor, result.superpixelColor[y][x]);
                             }
-                            result.prob_o_ = 1.0 / (result.outWidth * result.outHeight);
-                            fc = first_color.map(function (x) { return x * result.prob_o_; });
-                            result.prob_c = [0.5, 0.5];
-                            result.prob_co_ = [
+                            result.singleProbability = 1.0 / (result.outWidth * result.outHeight);
+                            fc = firstColor.map(function (x) { return x * result.singleProbability; });
+                            result.colorProbability = [0.5, 0.5];
+                            result.superpixelColorProbability = [
                                 util_1.array1d(result.outWidth * result.outHeight, function () { return 0.5; }),
                                 util_1.array1d(result.outWidth * result.outHeight, function () { return 0.5; }),
                             ];
@@ -338,8 +352,8 @@ define("gerstner", ["require", "exports", "util"], function (require, exports, u
                             _a = __read.apply(void 0, [_b.sent(), 2]), val = _a[0], t = _a[1];
                             util_1.add(val, fc);
                             result.palette.push(val);
-                            result.sub_superpixel_pairs = [[0, 1]];
-                            result.temperature_ = t;
+                            result.colorPairs = [[0, 1]];
+                            result.temperature = t;
                             return [2 /*return*/, result];
                     }
                 });
@@ -347,14 +361,14 @@ define("gerstner", ["require", "exports", "util"], function (require, exports, u
         };
         GerstnerPixelArt.prototype.getAveragedPalette = function () {
             var averagedPalette = JSON.parse(JSON.stringify(this.palette));
-            if (this.palette_maxed_flag_)
+            if (this.paletteWasHuge)
                 return averagedPalette;
             var _loop_2 = function (i) {
-                var _a = __read(this_1.sub_superpixel_pairs[i], 2), index1 = _a[0], index2 = _a[1];
+                var _a = __read(this_1.colorPairs[i], 2), index1 = _a[0], index2 = _a[1];
                 var color1 = this_1.palette[index1];
                 var color2 = this_1.palette[index2];
-                var weight1 = this_1.prob_c[index1];
-                var weight2 = this_1.prob_c[index2];
+                var weight1 = this_1.colorProbability[index1];
+                var weight2 = this_1.colorProbability[index2];
                 var totalWeight = weight1 + weight2;
                 weight1 /= totalWeight;
                 weight2 /= totalWeight;
@@ -363,7 +377,7 @@ define("gerstner", ["require", "exports", "util"], function (require, exports, u
                 averagedPalette[index2] = averagedColor;
             };
             var this_1 = this;
-            for (var i = 0; i < this.sub_superpixel_pairs.length; ++i) {
+            for (var i = 0; i < this.colorPairs.length; ++i) {
                 _loop_2(i);
             }
             return averagedPalette;
@@ -374,7 +388,7 @@ define("gerstner", ["require", "exports", "util"], function (require, exports, u
                 return __generator(this, function (_a) {
                     switch (_a.label) {
                         case 0:
-                            this.region_map = util_1.array2d(this.width, this.height, function () { return [-1, 0]; });
+                            this.regionMap = util_1.array2d(this.width, this.height, function () { return [-1, 0]; });
                             averagedPalette = this.getAveragedPalette();
                             distance = util_1.array2d(this.width, this.height, function () { return -5; });
                             y = 0;
@@ -382,20 +396,20 @@ define("gerstner", ["require", "exports", "util"], function (require, exports, u
                         case 1:
                             if (!(y < this.outHeight)) return [3 /*break*/, 4];
                             for (x = 0; x < this.outWidth; ++x) {
-                                pos = this.superpixel_pos[y][x];
-                                minX = Math.max(0, Math.floor(pos[0] - this.range_));
-                                minY = Math.max(0, Math.floor(pos[1] - this.range_));
-                                maxX = Math.min(this.width - 1, pos[0] + this.range_);
-                                maxY = Math.min(this.height - 1, pos[1] + this.range_);
-                                superpixelColor = averagedPalette[this.palette_assign[y][x]];
+                                pos = this.centroids[y][x];
+                                minX = Math.max(0, Math.floor(pos[0] - this.slicRange));
+                                minY = Math.max(0, Math.floor(pos[1] - this.slicRange));
+                                maxX = Math.min(this.width - 1, pos[0] + this.slicRange);
+                                maxY = Math.min(this.height - 1, pos[1] + this.slicRange);
+                                superpixelColor = averagedPalette[this.paletteAt[y][x]];
                                 for (yy = minY; yy <= maxY; ++yy) {
                                     for (xx = minX; xx <= maxX; ++xx) {
                                         colorError = util_1.dist(this.input[yy][xx], superpixelColor);
-                                        distError = util_1.dist(pos, [xx, yy]);
-                                        error = colorError + this.slicTolerance / this.range_ * distError;
+                                        distError = util_1.dist(pos, [xx, yy]) * this.slicTolerance;
+                                        error = colorError + distError / this.slicRange;
                                         if (distance[yy][xx] < 0 || error < distance[yy][xx]) {
                                             distance[yy][xx] = error;
-                                            this.region_map[yy][xx] = [x, y];
+                                            this.regionMap[yy][xx] = [x, y];
                                         }
                                     }
                                 }
@@ -413,10 +427,10 @@ define("gerstner", ["require", "exports", "util"], function (require, exports, u
                         case 5:
                             if (!(y < this.height)) return [3 /*break*/, 8];
                             for (x = 0; x < this.width; ++x) {
-                                if (this.region_map[y][x][0] === -1) {
+                                if (this.regionMap[y][x][0] === -1) {
                                     i = Math.floor(x / this.width * this.outWidth);
                                     j = Math.floor(y / this.height * this.outHeight);
-                                    this.region_map[y][x] = [i, j];
+                                    this.regionMap[y][x] = [i, j];
                                 }
                             }
                             return [4 /*yield*/, this.releaser.release()];
@@ -440,20 +454,18 @@ define("gerstner", ["require", "exports", "util"], function (require, exports, u
                             colorSums = util_1.array2d(this.outWidth, this.outHeight, function () { return [0, 0, 0]; });
                             posSums = util_1.array2d(this.outWidth, this.outHeight, function () { return [0, 0]; });
                             weights = util_1.array2d(this.outWidth, this.outHeight, function () { return 0; });
-                            this.superpixel_opaque = util_1.array2d(this.outWidth, this.outHeight, function () { return true; });
-                            this.superpixel_weights_ = util_1.array2d(this.outWidth, this.outHeight, function () { return 0; });
+                            this.superpixelWeight = util_1.array2d(this.outWidth, this.outHeight, function () { return 0; });
+                            this.totalWeight = 0;
                             y = 0;
                             _b.label = 1;
                         case 1:
                             if (!(y < this.height)) return [3 /*break*/, 4];
                             for (x = 0; x < this.width; ++x) {
-                                _a = __read(this.region_map[y][x], 2), sx = _a[0], sy = _a[1];
-                                if (this.input_weights_[y][x] !== 1)
-                                    this.superpixel_opaque[sy][sx] = false;
+                                _a = __read(this.regionMap[y][x], 2), sx = _a[0], sy = _a[1];
                                 util_1.add(colorSums[sy][sx], this.input[y][x]);
                                 util_1.add(posSums[sy][sx], [x, y]);
                                 weights[sy][sx]++;
-                                this.superpixel_weights_[sy][sx] += this.input_weights_[y][x];
+                                this.superpixelWeight[sy][sx] += this.inputWeights[y][x];
                             }
                             return [4 /*yield*/, this.releaser.release()];
                         case 2:
@@ -473,13 +485,13 @@ define("gerstner", ["require", "exports", "util"], function (require, exports, u
                                 if (w === 0) {
                                     var inputX = Math.floor(x / this_2.outWidth * this_2.width);
                                     var inputY = Math.floor(y / this_2.outHeight * this_2.height);
-                                    this_2.superpixel_color[y][x] = this_2.input[inputY][inputX];
+                                    this_2.superpixelColor[y][x] = this_2.input[inputY][inputX];
                                 }
                                 else {
-                                    this_2.superpixel_color[y][x] = colorSums[y][x].map(function (c) { return c / w; });
-                                    this_2.superpixel_pos[y][x] = posSums[y][x].map(function (p) { return p / w; });
-                                    this_2.superpixel_weights_[y][x] /= w;
-                                    totalWeight += this_2.superpixel_weights_[y][x];
+                                    this_2.superpixelColor[y][x] = colorSums[y][x].map(function (c) { return c / w; });
+                                    this_2.centroids[y][x] = posSums[y][x].map(function (p) { return p / w; });
+                                    this_2.superpixelWeight[y][x] /= w;
+                                    totalWeight += this_2.superpixelWeight[y][x];
                                 }
                             };
                             this_2 = this;
@@ -494,9 +506,10 @@ define("gerstner", ["require", "exports", "util"], function (require, exports, u
                             ++y;
                             return [3 /*break*/, 5];
                         case 8:
+                            this.totalWeight = totalWeight;
                             for (y = 0; y < this.outHeight; ++y) {
                                 for (x = 0; x < this.outWidth; ++x)
-                                    this.superpixel_weights_[y][x] /= totalWeight;
+                                    this.superpixelWeight[y][x] /= totalWeight;
                             }
                             return [4 /*yield*/, this.smoothSuperpixelPositions()];
                         case 9:
@@ -511,37 +524,36 @@ define("gerstner", ["require", "exports", "util"], function (require, exports, u
         };
         GerstnerPixelArt.prototype.smoothSuperpixelColors = function () {
             return __awaiter(this, void 0, void 0, function () {
-                var new_superpixel_colors, i, _loop_4, this_3, j;
+                var newSuperpixelColors, i, _loop_4, this_3, j;
                 return __generator(this, function (_a) {
                     switch (_a.label) {
                         case 0:
-                            new_superpixel_colors = util_1.array2d(this.outWidth, this.outHeight, function () { return [0, 0, 0]; });
+                            newSuperpixelColors = util_1.array2d(this.outWidth, this.outHeight, function () { return [0, 0, 0]; });
                             i = 0;
                             _a.label = 1;
                         case 1:
                             if (!(i < this.outWidth)) return [3 /*break*/, 4];
                             _loop_4 = function (j) {
-                                var min_x = Math.max(0, i - 1);
-                                var max_x = Math.min(this_3.outWidth - 1, i + 1);
-                                var min_y = Math.max(0, j - 1);
-                                var max_y = Math.min(this_3.outHeight - 1, j + 1);
+                                var minX = Math.max(0, i - 1);
+                                var maxX = Math.min(this_3.outWidth - 1, i + 1);
+                                var minY = Math.max(0, j - 1);
+                                var maxY = Math.min(this_3.outHeight - 1, j + 1);
                                 var sum = [0, 0, 0];
                                 var weight = 0;
-                                var sc = this_3.superpixel_color[j][i];
-                                for (var ii = min_x; ii <= max_x; ++ii) {
+                                var sc = this_3.superpixelColor[j][i];
+                                for (var ii = minX; ii <= maxX; ++ii) {
                                     var _loop_5 = function (jj) {
-                                        var c_n = this_3.superpixel_color[jj][ii];
-                                        var w_color = util_1.gaussian(util_1.dist(sc, c_n), this_3.sigma_color_);
-                                        var w_pos = util_1.gaussian(util_1.dist([i, j], [ii, jj]), this_3.sigma_position_);
-                                        var w_total = w_color * w_pos;
-                                        util_1.add(sum, c_n.map(function (x) { return x * w_total; }));
-                                        weight += w_total;
+                                        var centroid = this_3.superpixelColor[jj][ii];
+                                        var colorMul = util_1.gaussian(util_1.dist(sc, centroid), this_3.smoothColorFactor);
+                                        var posMul = util_1.gaussian(util_1.dist([i, j], [ii, jj]), this_3.smoothPosFactor);
+                                        util_1.add(sum, centroid.map(function (x) { return x * colorMul * posMul; }));
+                                        weight += colorMul * posMul;
                                     };
-                                    for (var jj = min_y; jj <= max_y; ++jj) {
+                                    for (var jj = minY; jj <= maxY; ++jj) {
                                         _loop_5(jj);
                                     }
                                 }
-                                new_superpixel_colors[j][i] = sum.map(function (x) { return x / weight; });
+                                newSuperpixelColors[j][i] = sum.map(function (x) { return x / weight; });
                             };
                             this_3 = this;
                             for (j = 0; j < this.outHeight; ++j) {
@@ -555,7 +567,7 @@ define("gerstner", ["require", "exports", "util"], function (require, exports, u
                             ++i;
                             return [3 /*break*/, 1];
                         case 4:
-                            this.superpixel_color = new_superpixel_colors;
+                            this.superpixelColor = newSuperpixelColors;
                             return [2 /*return*/];
                     }
                 });
@@ -563,14 +575,14 @@ define("gerstner", ["require", "exports", "util"], function (require, exports, u
         };
         GerstnerPixelArt.prototype.associatePalette = function () {
             return __awaiter(this, void 0, void 0, function () {
-                var new_prob_c, overT, _loop_6, this_4, y;
+                var newColorProbability, overT, _loop_6, this_4, y;
                 var _this = this;
                 return __generator(this, function (_a) {
                     switch (_a.label) {
                         case 0:
-                            new_prob_c = util_1.array1d(this.palette.length, function () { return 0; });
-                            this.prob_co_ = util_1.array2d(this.outHeight * this.outWidth, this.palette.length, function () { return 0; });
-                            overT = -1 / this.temperature_;
+                            newColorProbability = util_1.array1d(this.palette.length, function () { return 0; });
+                            this.superpixelColorProbability = util_1.array2d(this.outHeight * this.outWidth, this.palette.length, function () { return 0; });
+                            overT = -1 / this.temperature;
                             _loop_6 = function (y) {
                                 var _loop_7, x;
                                 return __generator(this, function (_a) {
@@ -578,21 +590,21 @@ define("gerstner", ["require", "exports", "util"], function (require, exports, u
                                         case 0:
                                             _loop_7 = function (x) {
                                                 var probs = [];
-                                                var pixel = this_4.superpixel_color[y][x];
-                                                var sum_prob = 0;
+                                                var pixel = this_4.superpixelColor[y][x];
+                                                var probabilitySum = 0;
                                                 var index = util_1.minWithIndex(this_4.palette.map(function (c, i) {
-                                                    var color_error = util_1.dist(c, pixel);
-                                                    var prob = _this.prob_c[i] * Math.exp(color_error * overT);
+                                                    var colorError = util_1.dist(c, pixel);
+                                                    var prob = _this.colorProbability[i] * Math.exp(colorError * overT);
                                                     probs.push(prob);
-                                                    sum_prob += prob;
-                                                    return color_error;
+                                                    probabilitySum += prob;
+                                                    return colorError;
                                                 })).index;
-                                                this_4.palette_assign[y][x] = index;
-                                                var prob_sp = this_4.superpixel_weights_[y][x];
+                                                this_4.paletteAt[y][x] = index;
+                                                var superpixelWeight = this_4.superpixelWeight[y][x];
                                                 probs.forEach(function (p, i) {
-                                                    var normalized_prob = p / sum_prob;
-                                                    _this.prob_co_[i][_this.vec2idx([x, y])] = normalized_prob;
-                                                    new_prob_c[i] += prob_sp * normalized_prob;
+                                                    var normalizedProb = p / probabilitySum;
+                                                    _this.superpixelColorProbability[i][_this.vec2idx([x, y])] = normalizedProb;
+                                                    newColorProbability[i] += superpixelWeight * normalizedProb;
                                                 });
                                             };
                                             for (x = 0; x < this_4.outWidth; ++x) {
@@ -618,7 +630,7 @@ define("gerstner", ["require", "exports", "util"], function (require, exports, u
                             ++y;
                             return [3 /*break*/, 1];
                         case 4:
-                            this.prob_c = new_prob_c;
+                            this.colorProbability = newColorProbability;
                             return [2 /*return*/];
                     }
                 });
@@ -626,11 +638,11 @@ define("gerstner", ["require", "exports", "util"], function (require, exports, u
         };
         GerstnerPixelArt.prototype.smoothSuperpixelPositions = function () {
             return __awaiter(this, void 0, void 0, function () {
-                var new_superpixel_pos, i, j, sum, count, orig, nPos;
+                var newCentroids, i, j, sum, count, orig, nPos;
                 return __generator(this, function (_a) {
                     switch (_a.label) {
                         case 0:
-                            new_superpixel_pos = util_1.array2d(this.outWidth, this.outHeight, function () { return [0, 0]; });
+                            newCentroids = util_1.array2d(this.outWidth, this.outHeight, function () { return [0, 0]; });
                             i = 0;
                             _a.label = 1;
                         case 1:
@@ -639,38 +651,38 @@ define("gerstner", ["require", "exports", "util"], function (require, exports, u
                                 sum = [0, 0];
                                 count = 0;
                                 if (i > 0) {
-                                    util_1.add(sum, this.superpixel_pos[j][i - 1]);
+                                    util_1.add(sum, this.centroids[j][i - 1]);
                                     count++;
                                 }
                                 if (i < this.outWidth - 1) {
-                                    util_1.add(sum, this.superpixel_pos[j][i + 1]);
+                                    util_1.add(sum, this.centroids[j][i + 1]);
                                     count++;
                                 }
                                 if (j > 0) {
-                                    util_1.add(sum, this.superpixel_pos[j - 1][i]);
+                                    util_1.add(sum, this.centroids[j - 1][i]);
                                     count++;
                                 }
                                 if (j < this.outHeight - 1) {
-                                    util_1.add(sum, this.superpixel_pos[j + 1][i]);
+                                    util_1.add(sum, this.centroids[j + 1][i]);
                                     count++;
                                 }
                                 sum[0] /= count;
                                 sum[1] /= count;
-                                orig = this.superpixel_pos[j][i];
+                                orig = this.centroids[j][i];
                                 nPos = [0, 0];
                                 if (i === 0 || i === this.outWidth - 1) {
                                     nPos[0] = orig[0];
                                 }
                                 else {
-                                    nPos[0] = (1.0 - this.smooth_pos_factor_) * orig[0] + this.smooth_pos_factor_ * sum[0];
+                                    nPos[0] = (1.0 - this.laplaceFactor) * orig[0] + this.laplaceFactor * sum[0];
                                 }
                                 if (j === 0 || j === this.outHeight - 1) {
                                     nPos[1] = orig[1];
                                 }
                                 else {
-                                    nPos[1] = (1.0 - this.smooth_pos_factor_) * orig[1] + this.smooth_pos_factor_ * sum[1];
+                                    nPos[1] = (1.0 - this.laplaceFactor) * orig[1] + this.laplaceFactor * sum[1];
                                 }
-                                new_superpixel_pos[j][i] = nPos;
+                                newCentroids[j][i] = nPos;
                             }
                             return [4 /*yield*/, this.releaser.release()];
                         case 2:
@@ -680,7 +692,7 @@ define("gerstner", ["require", "exports", "util"], function (require, exports, u
                             ++i;
                             return [3 /*break*/, 1];
                         case 4:
-                            this.superpixel_pos = new_superpixel_pos;
+                            this.centroids = newCentroids;
                             return [2 /*return*/];
                     }
                 });
@@ -688,23 +700,23 @@ define("gerstner", ["require", "exports", "util"], function (require, exports, u
         };
         GerstnerPixelArt.prototype.refinePalette = function () {
             return __awaiter(this, void 0, void 0, function () {
-                var color_sums, _loop_8, this_5, y, palette_error;
+                var colorSums, _loop_8, this_5, y, paletteError;
                 var _this = this;
                 return __generator(this, function (_a) {
                     switch (_a.label) {
                         case 0:
-                            color_sums = util_1.array1d(this.palette.length, function () { return [0, 0, 0]; });
+                            colorSums = util_1.array1d(this.palette.length, function () { return [0, 0, 0]; });
                             _loop_8 = function (y) {
                                 var _loop_9, x;
                                 return __generator(this, function (_a) {
                                     switch (_a.label) {
                                         case 0:
                                             _loop_9 = function (x) {
-                                                var prob_sb = this_5.superpixel_weights_[y][x];
-                                                var pixel_color = this_5.superpixel_color[y][x];
+                                                var superpixelWeight = this_5.superpixelWeight[y][x];
+                                                var superpixelColor = this_5.superpixelColor[y][x];
                                                 this_5.palette.forEach(function (_, i) {
-                                                    var w = prob_sb * _this.prob_co_[i][_this.vec2idx([x, y])];
-                                                    util_1.add(color_sums[i], pixel_color.map(function (x) { return x * w; }));
+                                                    var w = superpixelWeight * _this.superpixelColorProbability[i][_this.vec2idx([x, y])];
+                                                    util_1.add(colorSums[i], superpixelColor.map(function (x) { return x * w; }));
                                                 });
                                             };
                                             for (x = 0; x < this_5.outWidth; ++x) {
@@ -730,22 +742,22 @@ define("gerstner", ["require", "exports", "util"], function (require, exports, u
                             ++y;
                             return [3 /*break*/, 1];
                         case 4:
-                            palette_error = 0;
+                            paletteError = 0;
                             this.palette.forEach(function (c, i) {
-                                if (_this.prob_c[i] > 0) {
-                                    var new_color = color_sums[i].map(function (x) { return x / _this.prob_c[i]; });
-                                    palette_error += util_1.dist(c, new_color);
-                                    _this.palette[i] = new_color;
+                                if (_this.colorProbability[i] > 0) {
+                                    var newColor = colorSums[i].map(function (x) { return x / _this.colorProbability[i]; });
+                                    paletteError += util_1.dist(c, newColor);
+                                    _this.palette[i] = newColor;
                                 }
                             });
-                            return [2 /*return*/, palette_error];
+                            return [2 /*return*/, paletteError];
                     }
                 });
             });
         };
-        GerstnerPixelArt.prototype.getMaxEigen = function (palette_index) {
+        GerstnerPixelArt.prototype.getMaxEigen = function (index) {
             return __awaiter(this, void 0, void 0, function () {
-                var matrix, y, x, prob_oc, color_error, _a, vec, lambda, len;
+                var matrix, y, x, colorSuperpixelProbability, colorError, _a, vec, lambda, len;
                 return __generator(this, function (_b) {
                     switch (_b.label) {
                         case 0:
@@ -755,17 +767,18 @@ define("gerstner", ["require", "exports", "util"], function (require, exports, u
                         case 1:
                             if (!(y < this.outHeight)) return [3 /*break*/, 4];
                             for (x = 0; x < this.outWidth; ++x) {
-                                prob_oc = this.prob_co_[palette_index][this.vec2idx([x, y])] * this.prob_o_ / this.prob_c[palette_index];
-                                color_error = util_1.diff(this.palette[palette_index], this.superpixel_color[y][x]).map(function (x) { return Math.abs(x); });
-                                matrix[0] += prob_oc * color_error[0] * color_error[0];
-                                matrix[1] += prob_oc * color_error[1] * color_error[0];
-                                matrix[2] += prob_oc * color_error[2] * color_error[0];
-                                matrix[3] += prob_oc * color_error[0] * color_error[1];
-                                matrix[4] += prob_oc * color_error[1] * color_error[1];
-                                matrix[5] += prob_oc * color_error[2] * color_error[1];
-                                matrix[6] += prob_oc * color_error[0] * color_error[2];
-                                matrix[7] += prob_oc * color_error[1] * color_error[2];
-                                matrix[8] += prob_oc * color_error[2] * color_error[2];
+                                colorSuperpixelProbability = this.superpixelColorProbability[index][this.vec2idx([x, y])] *
+                                    this.singleProbability / this.colorProbability[index];
+                                colorError = util_1.diff(this.palette[index], this.superpixelColor[y][x]).map(function (x) { return Math.abs(x); });
+                                matrix[0] += colorSuperpixelProbability * colorError[0] * colorError[0];
+                                matrix[1] += colorSuperpixelProbability * colorError[1] * colorError[0];
+                                matrix[2] += colorSuperpixelProbability * colorError[2] * colorError[0];
+                                matrix[3] += colorSuperpixelProbability * colorError[0] * colorError[1];
+                                matrix[4] += colorSuperpixelProbability * colorError[1] * colorError[1];
+                                matrix[5] += colorSuperpixelProbability * colorError[2] * colorError[1];
+                                matrix[6] += colorSuperpixelProbability * colorError[0] * colorError[2];
+                                matrix[7] += colorSuperpixelProbability * colorError[1] * colorError[2];
+                                matrix[8] += colorSuperpixelProbability * colorError[2] * colorError[2];
                             }
                             return [4 /*yield*/, this.releaser.release()];
                         case 2:
@@ -784,69 +797,69 @@ define("gerstner", ["require", "exports", "util"], function (require, exports, u
         };
         GerstnerPixelArt.prototype.splitColor = function (index) {
             return __awaiter(this, void 0, void 0, function () {
-                var _a, index1, index2, nextIndex1, nextIndex2, color1, color2, _b, subcluster_color_1, _c, subcluster_color_2;
+                var _a, index1, index2, nextIndex1, nextIndex2, color1, color2, _b, subColor1, _c, subColor2;
                 return __generator(this, function (_d) {
                     switch (_d.label) {
                         case 0:
-                            _a = __read(this.sub_superpixel_pairs[index], 2), index1 = _a[0], index2 = _a[1];
+                            _a = __read(this.colorPairs[index], 2), index1 = _a[0], index2 = _a[1];
                             nextIndex1 = this.palette.length;
                             nextIndex2 = nextIndex1 + 1;
                             color1 = this.palette[index1];
                             color2 = this.palette[index2];
                             return [4 /*yield*/, this.getMaxEigen(index1)];
                         case 1:
-                            _b = __read.apply(void 0, [_d.sent(), 1]), subcluster_color_1 = _b[0];
+                            _b = __read.apply(void 0, [_d.sent(), 1]), subColor1 = _b[0];
                             return [4 /*yield*/, this.getMaxEigen(index2)];
                         case 2:
-                            _c = __read.apply(void 0, [_d.sent(), 1]), subcluster_color_2 = _c[0];
-                            util_1.add(subcluster_color_1, color1);
-                            util_1.add(subcluster_color_2, color2);
-                            this.palette.push(subcluster_color_1);
-                            this.sub_superpixel_pairs[index][1] = nextIndex1;
-                            this.prob_c[index1] *= 0.5;
-                            this.prob_c.push(this.prob_c[index1]);
-                            this.prob_co_.push(this.prob_co_[index1]);
-                            this.palette.push(subcluster_color_2);
-                            this.sub_superpixel_pairs.push([index2, nextIndex2]);
-                            this.prob_c[index2] *= 0.5;
-                            this.prob_c.push(this.prob_c[index2]);
-                            this.prob_co_.push(this.prob_co_[index2]);
+                            _c = __read.apply(void 0, [_d.sent(), 1]), subColor2 = _c[0];
+                            util_1.add(subColor1, color1);
+                            util_1.add(subColor2, color2);
+                            this.palette.push(subColor1);
+                            this.colorPairs[index][1] = nextIndex1;
+                            this.colorProbability[index1] *= 0.5;
+                            this.colorProbability.push(this.colorProbability[index1]);
+                            this.superpixelColorProbability.push(this.superpixelColorProbability[index1]);
+                            this.palette.push(subColor2);
+                            this.colorPairs.push([index2, nextIndex2]);
+                            this.colorProbability[index2] *= 0.5;
+                            this.colorProbability.push(this.colorProbability[index2]);
+                            this.superpixelColorProbability.push(this.superpixelColorProbability[index2]);
                             return [2 /*return*/];
                     }
                 });
             });
         };
         GerstnerPixelArt.prototype.condensePalette = function () {
-            this.palette_maxed_flag_ = true;
-            var new_palette = [];
-            var new_prob_c = [];
+            this.paletteWasHuge = true;
+            var newPalette = [];
+            var newColorProbability = [];
             var nPaletteAssign = util_1.array2d(this.outWidth, this.outHeight, function () { return 0; });
             var _loop_10 = function (j) {
-                var _a = __read(this_6.sub_superpixel_pairs[j], 2), index1 = _a[0], index2 = _a[1];
-                var weight1 = this_6.prob_c[index1];
-                var weight2 = this_6.prob_c[index2];
+                var _a = __read(this_6.colorPairs[j], 2), index1 = _a[0], index2 = _a[1];
+                var weight1 = this_6.colorProbability[index1];
+                var weight2 = this_6.colorProbability[index2];
                 var total_weight = weight1 + weight2;
                 weight1 /= total_weight;
                 weight2 /= total_weight;
                 var color = this_6.palette[index1].map(function (x) { return x * weight1; });
                 util_1.add(color, this_6.palette[index2].map(function (x) { return x * weight2; }));
-                new_palette.push(color);
-                new_prob_c.push(this_6.prob_c[index1] + this_6.prob_c[index2]);
+                newPalette.push(color);
+                newColorProbability.push(this_6.colorProbability[index1] + this_6.colorProbability[index2]);
                 for (var y = 0; y < this_6.outHeight; ++y) {
                     for (var x = 0; x < this_6.outWidth; ++x) {
-                        if ([index1, index2].includes(this_6.palette_assign[y][x])) {
+                        if ([index1, index2].includes(this_6.paletteAt[y][x])) {
                             nPaletteAssign[y][x] = j;
                         }
                     }
                 }
             };
             var this_6 = this;
-            for (var j = 0; j < this.sub_superpixel_pairs.length; ++j) {
+            for (var j = 0; j < this.colorPairs.length; ++j) {
                 _loop_10(j);
             }
-            this.palette = new_palette;
-            this.palette_assign = nPaletteAssign;
-            this.prob_c = new_prob_c;
+            this.palette = newPalette;
+            this.paletteAt = nPaletteAssign;
+            this.colorProbability = newColorProbability;
         };
         GerstnerPixelArt.prototype.expandPalette = function () {
             return __awaiter(this, void 0, void 0, function () {
@@ -854,14 +867,14 @@ define("gerstner", ["require", "exports", "util"], function (require, exports, u
                 return __generator(this, function (_c) {
                     switch (_c.label) {
                         case 0:
-                            if (this.palette_maxed_flag_)
+                            if (this.paletteWasHuge)
                                 return [2 /*return*/];
                             splits = [];
                             index = 0;
                             _c.label = 1;
                         case 1:
-                            if (!(index < this.sub_superpixel_pairs.length)) return [3 /*break*/, 5];
-                            _a = __read(this.sub_superpixel_pairs[index], 2), index1 = _a[0], index2 = _a[1];
+                            if (!(index < this.colorPairs.length)) return [3 /*break*/, 5];
+                            _a = __read(this.colorPairs[index], 2), index1 = _a[0], index2 = _a[1];
                             color1 = this.palette[index1];
                             color2 = this.palette[index2];
                             error = util_1.dist(color1, color2);
@@ -885,7 +898,7 @@ define("gerstner", ["require", "exports", "util"], function (require, exports, u
                             return [4 /*yield*/, this.splitColor(splits[i][1])];
                         case 7:
                             _c.sent();
-                            if (this.palette.length >= 2 * this.max_palette_size_) {
+                            if (this.palette.length >= 2 * this.paletteSize) {
                                 this.condensePalette();
                                 return [2 /*return*/];
                             }
@@ -904,7 +917,7 @@ define("gerstner", ["require", "exports", "util"], function (require, exports, u
                 return __generator(this, function (_a) {
                     switch (_a.label) {
                         case 0:
-                            if (this.converged_flag_)
+                            if (this.hasConverged)
                                 return [2 /*return*/];
                             return [4 /*yield*/, this.updateSuperPixelMapping()];
                         case 1:
@@ -919,10 +932,10 @@ define("gerstner", ["require", "exports", "util"], function (require, exports, u
                         case 4:
                             paletteError = _a.sent();
                             if (!(paletteError < 1)) return [3 /*break*/, 6];
-                            if (this.temperature_ <= 1)
-                                this.converged_flag_ = true;
+                            if (this.temperature <= 1)
+                                this.hasConverged = true;
                             else
-                                this.temperature_ = Math.max(this.temperature_ * 0.7, 1);
+                                this.temperature = Math.max(this.temperature * 0.7, 1);
                             return [4 /*yield*/, this.expandPalette()];
                         case 5:
                             _a.sent();
@@ -933,25 +946,45 @@ define("gerstner", ["require", "exports", "util"], function (require, exports, u
             });
         };
         GerstnerPixelArt.prototype.hasCompleted = function () {
-            return this.converged_flag_;
+            return this.hasConverged;
         };
         GerstnerPixelArt.prototype.draw = function (canvas) {
             return __awaiter(this, void 0, void 0, function () {
-                var averagedPalette, pixelSize, palette, y, x, paletteIndex, _a, r, g, b, alpha;
-                return __generator(this, function (_b) {
+                var averagedPalette, _a, pixelSize, superpixelWeight, paletteAt, outHeight, outWidth, palette, mul, y, x, paletteIndex, _b, r, g, b, alpha;
+                return __generator(this, function (_c) {
                     averagedPalette = this.getAveragedPalette().map(util_1.lab2rgb);
-                    pixelSize = this.pixelSize;
+                    _a = this, pixelSize = _a.pixelSize, superpixelWeight = _a.superpixelWeight, paletteAt = _a.paletteAt, outHeight = _a.outHeight, outWidth = _a.outWidth;
                     palette = averagedPalette.map(function (color) { return ({ color: color, timesUsed: 0 }); });
-                    for (y = 0; y < this.outHeight; ++y) {
-                        for (x = 0; x < this.outWidth; ++x) {
-                            paletteIndex = this.palette_assign[y][x];
-                            _a = __read(averagedPalette[paletteIndex], 3), r = _a[0], g = _a[1], b = _a[2];
-                            alpha = this.input_weights_[y * pixelSize][x * pixelSize] === 1 ? 255 : 0;
+                    mul = this.totalWeight * 255;
+                    for (y = 0; y < outHeight; ++y) {
+                        for (x = 0; x < outWidth; ++x) {
+                            paletteIndex = paletteAt[y][x];
+                            _b = __read(averagedPalette[paletteIndex], 3), r = _b[0], g = _b[1], b = _b[2];
+                            alpha = Math.floor(superpixelWeight[y][x] * mul);
                             palette[paletteIndex].timesUsed++;
                             canvas.fillRect(x * pixelSize, y * pixelSize, pixelSize, pixelSize, [r, g, b, alpha]);
                         }
                     }
                     return [2 /*return*/, palette];
+                });
+            });
+        };
+        GerstnerPixelArt.prototype.drawRealSized = function (canvas) {
+            return __awaiter(this, void 0, void 0, function () {
+                var averagedPalette, _a, superpixelWeight, paletteAt, outHeight, outWidth, mul, y, x, paletteIndex, _b, r, g, b, alpha;
+                return __generator(this, function (_c) {
+                    averagedPalette = this.getAveragedPalette().map(util_1.lab2rgb);
+                    _a = this, superpixelWeight = _a.superpixelWeight, paletteAt = _a.paletteAt, outHeight = _a.outHeight, outWidth = _a.outWidth;
+                    mul = this.totalWeight * 255;
+                    for (y = 0; y < outHeight; ++y) {
+                        for (x = 0; x < outWidth; ++x) {
+                            paletteIndex = paletteAt[y][x];
+                            _b = __read(averagedPalette[paletteIndex], 3), r = _b[0], g = _b[1], b = _b[2];
+                            alpha = Math.floor(superpixelWeight[y][x] * mul);
+                            canvas.setPixel(x, y, [r, g, b, alpha]);
+                        }
+                    }
+                    return [2 /*return*/];
                 });
             });
         };
@@ -1063,9 +1096,9 @@ define("naive", ["require", "exports", "util"], function (require, exports, util
                             if (!(j < pixels.length)) return [3 /*break*/, 4];
                             row = pixels[j];
                             for (i = 0; i < row.length; i += pixelSize) {
-                                alpha = row[i][3] === 255;
+                                alpha = row[i][3];
                                 _b = __read(palette[clusterMap[j][i]].color, 3), r = _b[0], g = _b[1], b = _b[2];
-                                canvas.fillRect(i, j, pixelSize, pixelSize, [r, g, b, alpha ? 255 : 0]);
+                                canvas.fillRect(i, j, pixelSize, pixelSize, [r, g, b, alpha]);
                             }
                             return [4 /*yield*/, releaser.release()];
                         case 2:
@@ -1075,6 +1108,35 @@ define("naive", ["require", "exports", "util"], function (require, exports, util
                             j += pixelSize;
                             return [3 /*break*/, 1];
                         case 4: return [2 /*return*/, this.palette];
+                    }
+                });
+            });
+        };
+        NaivePixelArt.prototype.drawRealSized = function (canvas) {
+            return __awaiter(this, void 0, void 0, function () {
+                var _a, palette, pixels, pixelSize, clusterMap, releaser, j, y, row, i, x, alpha, _b, r, g, b;
+                return __generator(this, function (_c) {
+                    switch (_c.label) {
+                        case 0:
+                            _a = this, palette = _a.palette, pixels = _a.pixels, pixelSize = _a.pixelSize, clusterMap = _a.clusterMap, releaser = _a.releaser;
+                            j = 0, y = 0;
+                            _c.label = 1;
+                        case 1:
+                            if (!(j < pixels.length)) return [3 /*break*/, 4];
+                            row = pixels[j];
+                            for (i = 0, x = 0; i < row.length; i += pixelSize, x++) {
+                                alpha = row[i][3];
+                                _b = __read(palette[clusterMap[j][i]].color, 3), r = _b[0], g = _b[1], b = _b[2];
+                                canvas.setPixel(x, y, [r, g, b, alpha]);
+                            }
+                            return [4 /*yield*/, releaser.release()];
+                        case 2:
+                            _c.sent();
+                            _c.label = 3;
+                        case 3:
+                            j += pixelSize, y++;
+                            return [3 /*break*/, 1];
+                        case 4: return [2 /*return*/];
                     }
                 });
             });
@@ -1141,8 +1203,10 @@ define("index", ["require", "exports", "dom", "naive", "canvas", "releaser", "ge
     var _this = this;
     Object.defineProperty(exports, "__esModule", { value: true });
     var releaser = new releaser_1.AnimationFrameReleaser();
+    var token = null;
     var setImage = function (url, needRevoke) {
         if (needRevoke === void 0) { needRevoke = false; }
+        token = Math.random().toString(16).substr(2);
         var inputs = document.querySelectorAll('#uploads > input');
         for (var i = 0; i < inputs.length; i++)
             inputs.item(i).disabled = true;
@@ -1168,38 +1232,69 @@ define("index", ["require", "exports", "dom", "naive", "canvas", "releaser", "ge
         setImage(url, true);
     };
     dom_1.dom.submitTests.forEach(function (inp, i) { return inp.onclick = setImage.bind(0, [
-        'samples/vasilii.jpg',
-        'samples/sonic.png',
-        'samples/lenna.jpg',
-        'samples/teapot.png',
+        'samples/beard.jpg',
+        'samples/crash.png',
+        'samples/crowd.png',
+        'samples/dali.jpg',
+        'samples/fireman.jpg',
         'samples/gradient.jpg',
-        'samples/lily.jpg'
+        'samples/gradient2.png',
+        'samples/lenna.jpg',
+        'samples/lily.jpg',
+        'samples/mgs.png',
+        'samples/shaving.jpg',
+        'samples/vasilii.jpg',
     ][i]); });
+    var savePng = function (canvas, pixelArt, pixelSize, token) { return __awaiter(_this, void 0, void 0, function () {
+        var c;
+        return __generator(this, function (_a) {
+            switch (_a.label) {
+                case 0:
+                    c = document.createElement('canvas');
+                    c.width = Math.ceil(canvas.getWidth() / pixelSize);
+                    c.height = Math.ceil(canvas.getHeight() / pixelSize);
+                    return [4 /*yield*/, pixelArt.drawRealSized(new canvas_1.default(c))];
+                case 1:
+                    _a.sent();
+                    dom_1.saveAs(c.toDataURL('image/png'), token + ".png");
+                    return [2 /*return*/];
+            }
+        });
+    }); };
+    var createGif = function () { return new GIF({ workerScript: 'lib/gif.worker.js' }); };
     var nnProcess = new dom_1.ButtonProcess(dom_1.dom.nnSubmit);
     dom_1.dom.nnSubmit.onclick = function () { return __awaiter(_this, void 0, void 0, function () {
-        var canvas, pixels, ns, i, palette;
+        var token2, canvas, pixels, nn, gif, i, palette, blob;
+        var _this = this;
         return __generator(this, function (_a) {
             switch (_a.label) {
                 case 0:
                     if (nnProcess.isCancelling())
                         return [2 /*return*/];
+                    token2 = token;
+                    dom_1.dom.gifNn.disabled = true;
+                    dom_1.dom.pngNn.disabled = true;
+                    dom_1.setProgress(dom_1.dom.progressNn, 0);
+                    dom_1.fillPalette(dom_1.dom.paletteNn, []);
                     dom_1.dom.canvasNn.width = dom_1.dom.canvasOrig.width;
                     dom_1.dom.canvasNn.height = dom_1.dom.canvasOrig.height;
                     canvas = new canvas_1.default(dom_1.dom.canvasNn);
                     pixels = (new canvas_1.default(dom_1.dom.canvasOrig)).getPixels();
-                    ns = naive_1.default.fromRandomPalette(dom_1.dom.nnColors.valueAsNumber, dom_1.dom.nnFactor.valueAsNumber, releaser, pixels);
+                    nn = naive_1.default.fromRandomPalette(dom_1.dom.nnColors.valueAsNumber, dom_1.dom.nnFactor.valueAsNumber, releaser, pixels);
+                    gif = createGif();
                     i = 1;
                     _a.label = 1;
                 case 1:
-                    if (!!ns.hasCompleted()) return [3 /*break*/, 5];
-                    return [4 /*yield*/, ns.iterate()];
+                    if (!!nn.hasCompleted()) return [3 /*break*/, 5];
+                    return [4 /*yield*/, nn.iterate()];
                 case 2:
                     _a.sent();
                     if (nnProcess.tryFreeButton())
                         return [2 /*return*/];
-                    return [4 /*yield*/, ns.draw(canvas)];
+                    return [4 /*yield*/, nn.draw(canvas)];
                 case 3:
                     palette = _a.sent();
+                    gif.addFrame(dom_1.dom.canvasNn, { delay: nn.hasCompleted() ? 3000 : 30, copy: true });
                     dom_1.setProgress(dom_1.dom.progressNn, i);
                     dom_1.fillPalette(dom_1.dom.paletteNn, palette);
                     if (nnProcess.tryFreeButton())
@@ -1209,19 +1304,47 @@ define("index", ["require", "exports", "dom", "naive", "canvas", "releaser", "ge
                     i++;
                     return [3 /*break*/, 1];
                 case 5:
+                    blob = null;
                     nnProcess.tryFreeButton(true);
+                    dom_1.dom.gifNn.disabled = false;
+                    dom_1.dom.pngNn.disabled = false;
+                    dom_1.dom.pngNn.onclick = function () { return __awaiter(_this, void 0, void 0, function () { return __generator(this, function (_a) {
+                        return [2 /*return*/, savePng(canvas, nn, nn.pixelSize, token2)];
+                    }); }); };
+                    dom_1.dom.gifNn.onclick = function () { return __awaiter(_this, void 0, void 0, function () {
+                        return __generator(this, function (_a) {
+                            switch (_a.label) {
+                                case 0:
+                                    if (!!blob) return [3 /*break*/, 2];
+                                    gif.render();
+                                    return [4 /*yield*/, new Promise(function (res) { return gif.on('finished', res); })];
+                                case 1:
+                                    blob = _a.sent();
+                                    _a.label = 2;
+                                case 2:
+                                    dom_1.saveAs(URL.createObjectURL(blob), token2 + ".gif");
+                                    return [2 /*return*/];
+                            }
+                        });
+                    }); };
                     return [2 /*return*/];
             }
         });
     }); };
     var gerstnerProcess = new dom_1.ButtonProcess(dom_1.dom.gerstnerSubmit);
     dom_1.dom.gerstnerSubmit.onclick = function () { return __awaiter(_this, void 0, void 0, function () {
-        var canvas, pixels, gerstner, i, palette;
+        var token2, canvas, pixels, gerstner, gif, i, palette, blob;
+        var _this = this;
         return __generator(this, function (_a) {
             switch (_a.label) {
                 case 0:
                     if (gerstnerProcess.isCancelling())
                         return [2 /*return*/];
+                    token2 = token + '_gerstner';
+                    dom_1.dom.gifGerstner.disabled = true;
+                    dom_1.dom.pngGerstner.disabled = true;
+                    dom_1.setProgress(dom_1.dom.progressGerstner, 0);
+                    dom_1.fillPalette(dom_1.dom.paletteGerstner, []);
                     dom_1.dom.canvasGerstner.width = dom_1.dom.canvasOrig.width;
                     dom_1.dom.canvasGerstner.height = dom_1.dom.canvasOrig.height;
                     canvas = new canvas_1.default(dom_1.dom.canvasGerstner);
@@ -1229,6 +1352,7 @@ define("index", ["require", "exports", "dom", "naive", "canvas", "releaser", "ge
                     return [4 /*yield*/, gerstner_1.default.fromImage(pixels, dom_1.dom.gerstnerFactor.valueAsNumber, dom_1.dom.gerstnerColors.valueAsNumber, releaser, jsfeat_1.default)];
                 case 1:
                     gerstner = _a.sent();
+                    gif = createGif();
                     i = 1;
                     _a.label = 2;
                 case 2:
@@ -1241,6 +1365,7 @@ define("index", ["require", "exports", "dom", "naive", "canvas", "releaser", "ge
                     return [4 /*yield*/, gerstner.draw(canvas)];
                 case 4:
                     palette = _a.sent();
+                    gif.addFrame(dom_1.dom.canvasGerstner, { delay: gerstner.hasCompleted() ? 3000 : 30, copy: true });
                     dom_1.setProgress(dom_1.dom.progressGerstner, i);
                     dom_1.fillPalette(dom_1.dom.paletteGerstner, palette);
                     if (gerstnerProcess.tryFreeButton())
@@ -1250,7 +1375,29 @@ define("index", ["require", "exports", "dom", "naive", "canvas", "releaser", "ge
                     i++;
                     return [3 /*break*/, 2];
                 case 6:
+                    blob = null;
                     gerstnerProcess.tryFreeButton(true);
+                    dom_1.dom.gifGerstner.disabled = false;
+                    dom_1.dom.pngGerstner.disabled = false;
+                    dom_1.dom.pngGerstner.onclick = function () { return __awaiter(_this, void 0, void 0, function () { return __generator(this, function (_a) {
+                        return [2 /*return*/, savePng(canvas, gerstner, gerstner.pixelSize, token2)];
+                    }); }); };
+                    dom_1.dom.gifGerstner.onclick = function () { return __awaiter(_this, void 0, void 0, function () {
+                        return __generator(this, function (_a) {
+                            switch (_a.label) {
+                                case 0:
+                                    if (!!blob) return [3 /*break*/, 2];
+                                    gif.render();
+                                    return [4 /*yield*/, new Promise(function (res) { return gif.on('finished', res); })];
+                                case 1:
+                                    blob = _a.sent();
+                                    _a.label = 2;
+                                case 2:
+                                    dom_1.saveAs(URL.createObjectURL(blob), token2 + ".gif");
+                                    return [2 /*return*/];
+                            }
+                        });
+                    }); };
                     return [2 /*return*/];
             }
         });

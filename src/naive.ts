@@ -3,11 +3,11 @@ import { PixelArtAlgorithm, Canvas, RgbColor, Palette, EventLoopReleaser, RgbaCo
 
 
 export default class NaivePixelArt implements PixelArtAlgorithm {
-  readonly releaser: EventLoopReleaser
-  readonly pixelSize: number
-  readonly pixels: RgbaColor[][]
-  readonly palette: Palette
-  readonly clusterMap: number[][]
+  releaser: EventLoopReleaser
+  pixelSize: number
+  pixels: RgbaColor[][]
+  palette: Palette
+  clusterMap: number[][]
   lastDistortion = 0
   completed = false
 
@@ -77,12 +77,25 @@ export default class NaivePixelArt implements PixelArtAlgorithm {
     for (let j = 0; j < pixels.length; j += pixelSize) {
       const row = pixels[j]
       for (let i = 0; i < row.length; i += pixelSize) {
-        const alpha = row[i][3] === 255
+        const alpha = row[i][3]
         const [r, g, b] = palette[clusterMap[j][i]].color
-        canvas.fillRect(i, j, pixelSize, pixelSize, [r, g, b, alpha ? 255 : 0])
+        canvas.fillRect(i, j, pixelSize, pixelSize, [r, g, b, alpha])
       }
       await releaser.release()
     }
     return this.palette
+  }
+
+  async drawRealSized(canvas: Canvas): Promise<void> {
+    const { palette, pixels, pixelSize, clusterMap, releaser } = this
+    for (let j = 0, y = 0; j < pixels.length; j += pixelSize, y++) {
+      const row = pixels[j]
+      for (let i = 0, x = 0; i < row.length; i += pixelSize, x++) {
+        const alpha = row[i][3]
+        const [r, g, b] = palette[clusterMap[j][i]].color
+        canvas.setPixel(x, y, [r, g, b, alpha])
+      }
+      await releaser.release()
+    }
   }
 }
